@@ -1,0 +1,101 @@
+{
+  "Think Expression": {
+    "prefix": "think",
+    "body": [
+      "think<${1:string}>(\"${2:prompt}\")"
+    ],
+    "description": "AI think expression"
+  },
+  "Think with Context": {
+    "prefix": "thinkctx",
+    "body": [
+      "think<${1:string}>(\"${2:prompt}\")",
+      "  with context: ${3:variable}"
+    ],
+    "description": "AI think expression with context"
+  },
+  "Think Confident": {
+    "prefix": "thinkconfident",
+    "body": [
+      "think<Confident<${1:string}>>(\"${2:prompt}\")"
+    ],
+    "description": "AI think expression with Confident wrapper"
+  },
+  "Infer Expression": {
+    "prefix": "infer",
+    "body": [
+      "infer<${1:string}>(${2:value}, \"${3:hint}\")"
+    ],
+    "description": "AI infer expression"
+  },
+  "Reason Block": {
+    "prefix": "reason",
+    "body": [
+      "reason<${1:Type}> {",
+      "  goal: \"${2:goal}\"",
+      "  steps:",
+      "    1. \"${3:first step}\"",
+      "    2. \"${4:second step}\"",
+      "}"
+    ],
+    "description": "AI reason block"
+  },
+  "Type Declaration": {
+    "prefix": "type",
+    "body": [
+      "type ${1:Name} {",
+      "  ${2:field}: ${3:string}",
+      "}"
+    ],
+    "description": "Type declaration"
+  },
+  "Function Declaration": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:name}(${2:param}: ${3:string}): ${4:string} {",
+      "  ${0}",
+      "}"
+    ],
+    "description": "Function declaration"
+  },
+  "Match Expression": {
+    "prefix": "match",
+    "body": [
+      "match ${1:value} {",
+      "  ${2:pattern} => ${3:result}",
+      "  _ => ${4:default}",
+      "}"
+    ],
+    "description": "Match expression"
+  },
+  "Try/Catch": {
+    "prefix": "trycatch",
+    "body": [
+      "try {",
+      "  ${1}",
+      "} catch ${2:SchemaViolation} (${3:e}) {",
+      "  ${4:print \"error\"}",
+      "}"
+    ],
+    "description": "Try/catch block"
+  },
+  "Guard Clause": {
+    "prefix": "guard",
+    "body": [
+      "guard {",
+      "  ${1:length}: ${2:10}..${3:500}",
+      "}",
+      "on_fail: retry(${4:3})"
+    ],
+    "description": "Guard clause with retry"
+  },
+  "Test Block": {
+    "prefix": "test",
+    "body": [
+      "test \"${1:description}\" {",
+      "  ${2:assert true}",
+      "}"
+    ],
+    "description": "Test block"
+  }
+}

@@ -1,0 +1,13 @@
+src/
+tests/
+scripts/
+examples/
+docs/
+thinklang-vscode/
+.env
+.env.example
+.gitignore
+tsconfig.json
+CLAUDE.md
+*.js.map
+*.d.ts.map
