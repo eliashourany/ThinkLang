@@ -1,8 +1,9 @@
 import peggy from "peggy";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 
-const base = import.meta.dirname ?? __dirname;
+const base = dirname(fileURLToPath(import.meta.url));
 const grammarPath = resolve(base, "../src/grammar/thinklang.peggy");
 const outputPath = resolve(base, "../src/parser/generated-parser.ts");
 
