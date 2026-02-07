@@ -312,9 +312,9 @@ test "summary is relevant" {
 Run tests with:
 
 ```bash
-npx ts-node --esm src/cli/index.ts test
-npx ts-node --esm src/cli/index.ts test --update-snapshots
-npx ts-node --esm src/cli/index.ts test --replay
+npx tsx src/cli/index.ts test
+npx tsx src/cli/index.ts test --update-snapshots
+npx tsx src/cli/index.ts test --replay
 ```
 
 ---

@@ -65,14 +65,14 @@ Copy `.env.example` to `.env` and set:
 ## CLI
 
 ```bash
-npx ts-node --esm src/cli/index.ts run <file.tl>              # run a program
-npx ts-node --esm src/cli/index.ts run <file.tl> --show-cost  # run with cost tracking
-npx ts-node --esm src/cli/index.ts compile <file.tl>          # emit TypeScript
-npx ts-node --esm src/cli/index.ts repl                       # interactive REPL
-npx ts-node --esm src/cli/index.ts test [file|dir]            # run .test.tl files
-npx ts-node --esm src/cli/index.ts test --update-snapshots    # record snapshot fixtures
-npx ts-node --esm src/cli/index.ts test --replay              # replay from snapshots (no API calls)
-npx ts-node --esm src/cli/index.ts cost-report                # show cost summary
+npx tsx src/cli/index.ts run <file.tl>              # run a program
+npx tsx src/cli/index.ts run <file.tl> --show-cost  # run with cost tracking
+npx tsx src/cli/index.ts compile <file.tl>          # emit TypeScript
+npx tsx src/cli/index.ts repl                       # interactive REPL
+npx tsx src/cli/index.ts test [file|dir]            # run .test.tl files
+npx tsx src/cli/index.ts test --update-snapshots    # record snapshot fixtures
+npx tsx src/cli/index.ts test --replay              # replay from snapshots (no API calls)
+npx tsx src/cli/index.ts cost-report                # show cost summary
 ```
 
 ThinkLang files use the `.tl` extension. Examples are in `examples/`.

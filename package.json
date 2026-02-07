@@ -13,14 +13,14 @@
     "src/grammar/thinklang.peggy"
   ],
   "scripts": {
-    "build:parser": "npx ts-node --esm scripts/build-parser.ts",
+    "build:parser": "npx tsx scripts/build-parser.ts",
     "build:ts": "tsc",
     "build": "npm run build:parser && npm run build:ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "repl": "npx ts-node --esm src/cli/index.ts repl",
-    "run:example": "npx ts-node --esm src/cli/index.ts run",
-    "lsp": "npx ts-node --esm src/lsp/server.ts",
+    "repl": "npx tsx src/cli/index.ts repl",
+    "run:example": "npx tsx src/cli/index.ts run",
+    "lsp": "npx tsx src/lsp/server.ts",
     "prepare": "npm run build"
   },
   "dependencies": {
@@ -59,6 +59,7 @@
     "peggy": "^3.0.2",
     "ts-node": "^10.9.2",
     "ts-pegjs": "^4.2.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }

@@ -14,7 +14,7 @@ npm run build
 Run commands via `npx`:
 
 ```bash
-npx ts-node --esm src/cli/index.ts <command> [options]
+npx tsx src/cli/index.ts <command> [options]
 ```
 
 ---
@@ -43,8 +43,8 @@ Compiles and executes a ThinkLang program.
 **Example:**
 
 ```bash
-npx ts-node --esm src/cli/index.ts run examples/01-hello-think.tl
-npx ts-node --esm src/cli/index.ts run examples/02-classification.tl --show-cost
+npx tsx src/cli/index.ts run examples/01-hello-think.tl
+npx tsx src/cli/index.ts run examples/02-classification.tl --show-cost
 ```
 
 ---
@@ -62,10 +62,10 @@ Compiles a ThinkLang program to TypeScript source code without executing it.
 
 ```bash
 # Print compiled TypeScript to stdout
-npx ts-node --esm src/cli/index.ts compile examples/01-hello-think.tl
+npx tsx src/cli/index.ts compile examples/01-hello-think.tl
 
 # Write to a file
-npx ts-node --esm src/cli/index.ts compile examples/01-hello-think.tl -o output.ts
+npx tsx src/cli/index.ts compile examples/01-hello-think.tl -o output.ts
 ```
 
 ---
@@ -75,7 +75,7 @@ npx ts-node --esm src/cli/index.ts compile examples/01-hello-think.tl -o output.
 Starts an interactive Read-Eval-Print Loop for ThinkLang.
 
 ```bash
-npx ts-node --esm src/cli/index.ts repl
+npx tsx src/cli/index.ts repl
 ```
 
 The REPL initializes the Anthropic provider and allows you to enter ThinkLang statements interactively.
@@ -107,19 +107,19 @@ Runs ThinkLang test files (`.test.tl`).
 
 ```bash
 # Run all tests in current directory
-npx ts-node --esm src/cli/index.ts test
+npx tsx src/cli/index.ts test
 
 # Run tests in a specific directory
-npx ts-node --esm src/cli/index.ts test tests/
+npx tsx src/cli/index.ts test tests/
 
 # Record snapshots
-npx ts-node --esm src/cli/index.ts test --update-snapshots
+npx tsx src/cli/index.ts test --update-snapshots
 
 # Replay from snapshots (no AI calls)
-npx ts-node --esm src/cli/index.ts test --replay
+npx tsx src/cli/index.ts test --replay
 
 # Filter by pattern
-npx ts-node --esm src/cli/index.ts test --pattern "classification"
+npx tsx src/cli/index.ts test --pattern "classification"
 ```
 
 ---
@@ -129,7 +129,7 @@ npx ts-node --esm src/cli/index.ts test --pattern "classification"
 Displays the cost report for the current session.
 
 ```bash
-npx ts-node --esm src/cli/index.ts cost-report
+npx tsx src/cli/index.ts cost-report
 ```
 
 **Output includes:**
