@@ -25,10 +25,3 @@ features:
   - title: Developer Experience
     details: VS Code extension, LSP, testing framework, and cost tracking built in.
 ---
-
-## Hire Me
-
-I'm actively looking for new opportunities. If you like ThinkLang and want to work together, feel free to reach out:
-
-- **LinkedIn**: [linkedin.com/in/develias](https://www.linkedin.com/in/develias/)
-- **Email**: [eliashourany@outlook.com](mailto:eliashourany@outlook.com)
