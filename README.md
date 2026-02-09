@@ -259,13 +259,6 @@ npm test                # run test suite
 npm run test:watch      # tests in watch mode
 ```
 
-## Hire Me
-
-I'm actively looking for new opportunities. If you like what you see and want to work together, feel free to reach out:
-
-- **LinkedIn**: [linkedin.com/in/develias](https://www.linkedin.com/in/develias/)
-- **Email**: [eliashourany@outlook.com](mailto:eliashourany@outlook.com)
-
 ## License
 
 MIT
