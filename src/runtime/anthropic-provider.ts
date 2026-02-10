@@ -25,10 +25,7 @@ export class AnthropicProvider implements ModelProvider {
         output_config: {
           format: {
             type: "json_schema" as const,
-            json_schema: {
-              name: options.schemaName ?? "result",
-              schema: options.jsonSchema,
-            },
+            schema: options.jsonSchema,
           },
         },
       } as any);
@@ -55,8 +52,12 @@ export class AnthropicProvider implements ModelProvider {
       throw new SchemaViolation("json response", block);
     } catch (error: any) {
       if (error instanceof SchemaViolation) throw error;
-      if (error?.status === 404 || error?.status === 400) {
+      if (error?.status === 404) {
         throw new ModelUnavailable(model);
+      }
+      if (error?.status === 400) {
+        const detail = error?.error?.error?.message ?? error?.message ?? "Bad request";
+        throw new ModelUnavailable(`${model} — ${detail}`);
       }
       throw error;
     }
