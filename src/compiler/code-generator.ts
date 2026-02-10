@@ -22,6 +22,7 @@ class CodeGenerator {
   private options: GeneratorOptions;
   private tempCounter = 0;
   private importedFunctions: AST.FunctionDeclarationNode[];
+  private inPipelineStage = false;
 
   constructor(typeDecls: TypeDeclMap, options: GeneratorOptions, importedFunctions?: AST.FunctionDeclarationNode[]) {
     this.typeDecls = typeDecls;
@@ -448,15 +449,19 @@ class CodeGenerator {
     }
 
     // Build as an IIFE
-    const stageExprs = expr.stages.map(s => this.emitExpr(s));
-    if (stageExprs.length === 1) return stageExprs[0];
+    // Compile first stage normally, subsequent stages with pipeline context
+    const firstExpr = this.emitExpr(expr.stages[0]);
+    if (expr.stages.length === 1) return firstExpr;
+
+    this.inPipelineStage = true;
+    const restExprs = expr.stages.slice(1).map(s => this.emitExpr(s));
+    this.inPipelineStage = false;
 
     let code = `(async () => { `;
-    code += `let ${temps[0]} = await ${stageExprs[0]}; `;
-    for (let i = 1; i < expr.stages.length; i++) {
-      // Pass previous result as __tl_pipe_input for pipeline stages
-      code += `let __tl_pipe_input = ${temps[i - 1]}; `;
-      code += `let ${temps[i]} = await ${stageExprs[i]}; `;
+    code += `let ${temps[0]} = await ${firstExpr}; `;
+    for (let i = 0; i < restExprs.length; i++) {
+      code += `let __tl_pipe_input = ${temps[i]}; `;
+      code += `let ${temps[i + 1]} = await ${restExprs[i]}; `;
     }
     code += `return ${temps[temps.length - 1]}; `;
     code += `})()`;
@@ -517,7 +522,11 @@ class CodeGenerator {
   }
 
   private emitContextArg(ctx: AST.ContextExpressionNode | null | undefined): string {
-    if (!ctx) return "{}";
+    const pipeEntry = this.inPipelineStage ? '"previous_result": __tl_pipe_input' : "";
+
+    if (!ctx) {
+      return pipeEntry ? `{ ${pipeEntry} }` : "{}";
+    }
 
     if (ctx.type === "ContextBlock") {
       const entries = ctx.entries.map(e => {
@@ -531,20 +540,25 @@ class CodeGenerator {
         }
         return "";
       });
+      if (pipeEntry) entries.unshift(pipeEntry);
       return `{ ${entries.join(", ")} }`;
     }
 
     if (ctx.type === "IdentifierExpression") {
-      return `{ "${ctx.name}": ${ctx.name} }`;
+      const entries = [`"${ctx.name}": ${ctx.name}`];
+      if (pipeEntry) entries.unshift(pipeEntry);
+      return `{ ${entries.join(", ")} }`;
     }
 
     if (ctx.type === "MemberExpression") {
       const key = this.getMemberPath(ctx);
       const val = this.emitExpr(ctx);
-      return `{ "${key}": ${val} }`;
+      const entries = [`"${key}": ${val}`];
+      if (pipeEntry) entries.unshift(pipeEntry);
+      return `{ ${entries.join(", ")} }`;
     }
 
-    return "{}";
+    return pipeEntry ? `{ ${pipeEntry} }` : "{}";
   }
 
   private getMemberPath(expr: AST.MemberExpressionNode): string {

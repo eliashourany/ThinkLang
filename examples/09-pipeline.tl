@@ -11,7 +11,8 @@ type Expanded {
 
 let text = "Machine learning is transforming healthcare through early disease detection and personalized treatment plans."
 
-let keywords = think<Keywords>("Extract the key technical terms from this text")
+let result = think<Keywords>("Extract the key technical terms from this text")
   with context: text
+  |> think<Expanded>("Take these keywords and add related terms for each one")
 
-print keywords
+print result

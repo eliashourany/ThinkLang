@@ -262,7 +262,7 @@ Expression
   = PipelineExpression
 
 PipelineExpression
-  = head:LogicalOrExpression tail:(_ "|>" _ LogicalOrExpression)+ {
+  = head:LogicalOrExpression tail:(__ "|>" __ LogicalOrExpression)+ {
     return { type: "PipelineExpression", stages: [head, ...tail.map(t => t[3])], location: loc() };
   }
   / LogicalOrExpression
