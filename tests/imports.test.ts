@@ -151,7 +151,7 @@ print s`;
     const result = await compile(source, { filePath });
 
     expect(result.errors).toHaveLength(0);
-    expect(result.code).toContain("interface Sentiment");
+    expect(result.code).toContain("// type Sentiment");
     expect(result.code).toContain("__tl_runtime.think(");
   });
 

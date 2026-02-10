@@ -146,25 +146,20 @@ class CodeGenerator {
   }
 
   private emitTypeDeclaration(decl: AST.TypeDeclarationNode): void {
-    // Emit as a TypeScript interface for readability
-    this.emit(`// type ${decl.name}`);
-    this.emit(`interface ${decl.name} {`);
-    this.indent++;
-    for (const field of decl.fields) {
-      const optional = field.typeExpr.type === "OptionalType" ? "?" : "";
-      this.emit(`${field.name}${optional}: ${typeExprToTsType(field.typeExpr)};`);
-    }
-    this.indent--;
-    this.emit(`}`);
+    // Type declarations are compile-time only; JSON schemas are inlined in think/infer/reason calls
+    const fields = decl.fields.map(f => {
+      const optional = f.typeExpr.type === "OptionalType" ? "?" : "";
+      return `${f.name}${optional}: ${typeExprToTsType(f.typeExpr)}`;
+    });
+    this.emit(`// type ${decl.name} { ${fields.join("; ")} }`);
   }
 
   private emitFunctionDeclaration(decl: AST.FunctionDeclarationNode): void {
     const params = decl.params
-      .map(p => `${p.name}: ${typeExprToTsType(p.typeExpr)}`)
+      .map(p => p.name)
       .join(", ");
-    const retType = decl.returnType ? `: ${typeExprToTsType(decl.returnType)}` : "";
 
-    this.emit(`async function ${decl.name}(${params})${retType} {`);
+    this.emit(`async function ${decl.name}(${params}) {`);
     this.indent++;
     for (const stmt of decl.body) {
       this.emitStatement(stmt);

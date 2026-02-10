@@ -27,7 +27,7 @@ let result = think<Classification>("Classify this email")
 print result`;
     const result = await compile(source);
     expect(result.errors).toHaveLength(0);
-    expect(result.code).toContain("interface Classification");
+    expect(result.code).toContain("// type Classification");
     expect(result.code).toContain("__tl_runtime.think(");
     expect(result.code).toContain('"type":"object"');
   });
@@ -51,8 +51,8 @@ let extracted = think<ExtractionResult>("Extract people")
 print extracted`;
     const result = await compile(source);
     expect(result.errors).toHaveLength(0);
-    expect(result.code).toContain("interface Person");
-    expect(result.code).toContain("interface ExtractionResult");
+    expect(result.code).toContain("// type Person");
+    expect(result.code).toContain("// type ExtractionResult");
   });
 
   it("compiles Confident type usage", async () => {

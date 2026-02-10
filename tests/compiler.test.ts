@@ -30,12 +30,10 @@ describe("ThinkLang Compiler", () => {
   });
 
   describe("type declarations", () => {
-    it("emits TypeScript interface for type declarations", async () => {
+    it("emits comment for type declarations", async () => {
       const result = await compile("type Foo {\n  name: string\n  age: int\n}");
       expect(result.errors).toHaveLength(0);
-      expect(result.code).toContain("interface Foo");
-      expect(result.code).toContain("name: string");
-      expect(result.code).toContain("age: number");
+      expect(result.code).toContain("// type Foo { name: string; age: number }");
     });
   });
 
@@ -43,7 +41,7 @@ describe("ThinkLang Compiler", () => {
     it("emits async function", async () => {
       const result = await compile('fn greet(name: string) {\n  print name\n}');
       expect(result.errors).toHaveLength(0);
-      expect(result.code).toContain("async function greet(name: string)");
+      expect(result.code).toContain("async function greet(name)");
     });
   });
 
