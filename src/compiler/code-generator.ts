@@ -23,6 +23,7 @@ class CodeGenerator {
   private tempCounter = 0;
   private importedFunctions: AST.FunctionDeclarationNode[];
   private inPipelineStage = false;
+  private inUncertainDecl = false;
 
   constructor(typeDecls: TypeDeclMap, options: GeneratorOptions, importedFunctions?: AST.FunctionDeclarationNode[]) {
     this.typeDecls = typeDecls;
@@ -170,7 +171,9 @@ class CodeGenerator {
   }
 
   private emitLetDeclaration(decl: AST.LetDeclarationNode): void {
+    if (decl.isUncertain) this.inUncertainDecl = true;
     const expr = this.emitExpr(decl.value);
+    this.inUncertainDecl = false;
     if (this.isAsyncExpr(decl.value)) {
       this.emit(`const ${decl.name} = await ${expr};`);
     } else {
@@ -369,6 +372,10 @@ class CodeGenerator {
       }
     }
 
+    if (this.inUncertainDecl) {
+      parts.push(`uncertain: true`);
+    }
+
     return `__tl_runtime.think({ ${parts.join(", ")} })`;
   }
 
@@ -396,6 +403,10 @@ class CodeGenerator {
       if (expr.onFail.fallback) {
         parts.push(`fallback: () => (${this.emitExpr(expr.onFail.fallback)})`);
       }
+    }
+
+    if (this.inUncertainDecl) {
+      parts.push(`uncertain: true`);
     }
 
     return `__tl_runtime.infer({ ${parts.join(", ")} })`;

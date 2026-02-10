@@ -17,11 +17,12 @@ export interface InferOptions {
   retryCount?: number;
   fallback?: () => unknown;
   schemaName?: string;
+  uncertain?: boolean;
 }
 
 export async function infer(options: InferOptions): Promise<unknown> {
   const {
-    jsonSchema,
+    jsonSchema: rawSchema,
     value,
     hint,
     context = {},
@@ -30,7 +31,19 @@ export async function infer(options: InferOptions): Promise<unknown> {
     retryCount,
     fallback,
     schemaName,
+    uncertain = false,
   } = options;
+
+  const jsonSchema = uncertain ? {
+    type: "object",
+    properties: {
+      value: rawSchema,
+      confidence: { type: "number" },
+      reasoning: { type: "string" },
+    },
+    required: ["value", "confidence", "reasoning"],
+    additionalProperties: false,
+  } : rawSchema;
 
   const effectiveContext = excludeFromContext(
     truncateContext(context),

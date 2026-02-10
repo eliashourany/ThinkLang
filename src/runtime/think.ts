@@ -16,11 +16,12 @@ export interface ThinkOptions {
   retryCount?: number;
   fallback?: () => unknown;
   schemaName?: string;
+  uncertain?: boolean;
 }
 
 export async function think(options: ThinkOptions): Promise<unknown> {
   const {
-    jsonSchema,
+    jsonSchema: rawSchema,
     prompt,
     context = {},
     withoutKeys = [],
@@ -28,7 +29,20 @@ export async function think(options: ThinkOptions): Promise<unknown> {
     retryCount,
     fallback,
     schemaName,
+    uncertain = false,
   } = options;
+
+  // When uncertain, wrap the schema in a Confident shape so the LLM provides confidence
+  const jsonSchema = uncertain ? {
+    type: "object",
+    properties: {
+      value: rawSchema,
+      confidence: { type: "number" },
+      reasoning: { type: "string" },
+    },
+    required: ["value", "confidence", "reasoning"],
+    additionalProperties: false,
+  } : rawSchema;
 
   const effectiveContext = excludeFromContext(
     truncateContext(context),
