@@ -92,3 +92,17 @@ let label = match score {
 
 print label
 ```
+
+## Note for JS/TS Users
+
+`match` is a language-level construct with no direct library equivalent. In JavaScript/TypeScript, use standard `if`/`else` or `switch` statements for the same branching logic:
+
+```typescript
+if (sentiment.confidence >= 0.9) {
+  console.log("High confidence result");
+} else if (sentiment.confidence >= 0.5) {
+  console.log("Moderate confidence result");
+} else {
+  console.log("Low confidence — manual review needed");
+}
+```

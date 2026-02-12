@@ -167,8 +167,72 @@ Thrown when an operation exceeds its time limit.
 **Message format:** `Operation timed out after <durationMs>ms`
 
 **Common causes:**
-- Slow network connection to the Anthropic API
+- Slow network connection to the AI provider's API
 - Very large prompts requiring long processing time
+
+---
+
+### AgentMaxTurnsError
+
+Thrown when an agent reaches its maximum turn limit without producing a final answer.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `string` | `"AgentMaxTurnsError"` |
+| `maxTurns` | `number` | The configured maximum turns |
+| `actualTurns` | `number` | The number of turns actually taken |
+
+**Message format:** `Agent reached maximum turns limit: <actualTurns>/<maxTurns>`
+
+**Common causes:**
+- The task is too complex for the number of allowed turns
+- Tools are not providing useful enough information for the agent to converge
+- The `max turns` limit is too low for the task
+
+**ThinkLang catch syntax:**
+
+```thinklang
+try {
+  let result = agent<Report>("Research this topic")
+    with tools: searchDocs
+    max turns: 3
+} catch AgentMaxTurnsError (e) {
+  print "Agent could not finish in time"
+}
+```
+
+**Mitigation:** Increase `max turns`, improve tool descriptions, or simplify the task.
+
+---
+
+### ToolExecutionError
+
+Thrown when a tool throws an error during execution.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `string` | `"ToolExecutionError"` |
+| `toolName` | `string` | Name of the tool that failed |
+| `cause` | `unknown` | The original error thrown by the tool |
+
+**Message format:** `Tool "<toolName>" failed: <cause message>`
+
+**Common causes:**
+- A tool's `execute` function threw an error (network failure, invalid input, etc.)
+- An external API called by the tool returned an error
+- The tool received unexpected input from the LLM
+
+**ThinkLang catch syntax:**
+
+```thinklang
+try {
+  let result = agent<Report>("Research this topic")
+    with tools: searchDocs
+    max turns: 5
+} catch ToolExecutionError (e) {
+  print "A tool failed during execution"
+}
+```
 
 ---
 
@@ -182,7 +246,9 @@ Error
         ├── GuardFailed
         ├── TokenBudgetExceeded
         ├── ModelUnavailable
-        └── Timeout
+        ├── Timeout
+        ├── AgentMaxTurnsError
+        └── ToolExecutionError
 ```
 
 ---
@@ -347,6 +413,8 @@ let response = match sentiment {
 | `TokenBudgetExceeded` | Runtime | Error | Yes |
 | `ModelUnavailable` | Runtime | Error | Yes |
 | `Timeout` | Runtime | Error | Yes |
+| `AgentMaxTurnsError` | Runtime | Error | Yes |
+| `ToolExecutionError` | Runtime | Error | Yes |
 | Parse error | Compile-time | Error | No |
 | `UncertainAccessError` | Type check | Error | No |
 | `TypeMismatchError` | Type check | Error | No |

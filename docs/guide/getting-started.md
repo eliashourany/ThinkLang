@@ -1,11 +1,15 @@
 # Getting Started
 
-This guide walks you through installing ThinkLang and running your first AI-powered program.
+This guide walks you through installing ThinkLang and running your first AI-powered program using the CLI and `.tl` files.
+
+::: tip Looking for the JS/TS library?
+If you want to use ThinkLang's AI primitives directly from JavaScript or TypeScript without writing `.tl` files, see the [Library Quick Start](/library/quick-start).
+:::
 
 ## Prerequisites
 
 - **Node.js 18+** (LTS recommended)
-- An **Anthropic API key** for AI features
+- An API key from any supported provider: **Anthropic**, **OpenAI**, **Google Gemini**, or a local **Ollama** server
 
 ## Installation
 
@@ -23,10 +27,20 @@ npx thinklang run hello.tl
 
 ## Environment Setup
 
-Set your Anthropic API key as an environment variable:
+Set an API key for your preferred provider as an environment variable:
 
 ```bash
+# Anthropic (default)
 export ANTHROPIC_API_KEY=sk-ant-your-key-here
+
+# Or OpenAI
+export OPENAI_API_KEY=sk-your-key-here
+
+# Or Google Gemini
+export GEMINI_API_KEY=AIyour-key-here
+
+# Or Ollama (local, no API key needed)
+export OLLAMA_BASE_URL=http://localhost:11434
 ```
 
 You can also create a `.env` file in your project directory:
@@ -39,9 +53,14 @@ THINKLANG_CACHE=true
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | -- | Your Anthropic API key |
+| `ANTHROPIC_API_KEY` | One of these | -- | Anthropic API key |
+| `OPENAI_API_KEY` | One of these | -- | OpenAI API key |
+| `GEMINI_API_KEY` | One of these | -- | Google Gemini API key |
+| `OLLAMA_BASE_URL` | One of these | -- | Ollama server URL |
 | `THINKLANG_MODEL` | No | `claude-opus-4-6` | Model to use for AI calls |
 | `THINKLANG_CACHE` | No | `true` | Cache identical AI requests |
+
+ThinkLang auto-detects which provider to use from the environment variable that is set. See the [Provider System](/library/providers) guide for details.
 
 ## Your First Program
 
@@ -130,3 +149,6 @@ All top-level `type` and `fn` declarations are automatically importable -- no `e
 - Take the [Language Tour](./language-tour.md) for a quick overview of all features
 - Learn about the [Type System](./types.md)
 - Explore [AI Primitives](./ai-primitives.md): `think`, `infer`, and `reason`
+- Build agentic workflows with [Agents & Tools](./agents.md)
+- Process collections with [Big Data](./big-data.md)
+- Use ThinkLang as a [JS/TS Library](/library/quick-start)

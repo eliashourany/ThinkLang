@@ -6,7 +6,7 @@ export interface SnapshotEntry {
   request: {
     systemPrompt: string;
     userMessage: string;
-    jsonSchema: Record<string, unknown>;
+    jsonSchema?: Record<string, unknown>;
   };
   response: {
     value: unknown;

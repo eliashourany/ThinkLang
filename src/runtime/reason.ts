@@ -24,7 +24,7 @@ export interface ReasonOptions {
   schemaName?: string;
 }
 
-export async function reason(options: ReasonOptions): Promise<unknown> {
+export async function reason<T = unknown>(options: ReasonOptions): Promise<T> {
   const {
     jsonSchema,
     goal,
@@ -45,10 +45,10 @@ export async function reason(options: ReasonOptions): Promise<unknown> {
   const cacheKey = JSON.stringify({ goal, steps });
   const cached = globalCache.get(cacheKey, effectiveContext, jsonSchema);
   if (cached !== undefined) {
-    return cached;
+    return cached as T;
   }
 
-  const execute = async () => {
+  const execute = async (): Promise<T> => {
     const provider = getProvider();
     const { systemPrompt, userMessage } = buildReasonPrompt(goal, steps, effectiveContext);
 
@@ -78,10 +78,10 @@ export async function reason(options: ReasonOptions): Promise<unknown> {
 
     if (isConfidentSchema(jsonSchema)) {
       const r = result as any;
-      return new Confident(r.value, r.confidence, r.reasoning ?? "");
+      return new Confident(r.value, r.confidence, r.reasoning ?? "") as T;
     }
 
-    return result;
+    return result as T;
   };
 
   if (retryCount && retryCount > 0) {

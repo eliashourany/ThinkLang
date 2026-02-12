@@ -124,3 +124,30 @@ try {
 | `expect(threshold)` | Returns value or throws `ConfidenceTooLow` |
 | `or(fallback)` | Returns value if confident, else fallback |
 | `isConfident(threshold?)` | Returns `bool`, default threshold 0.7 |
+
+## Using from JS/TS
+
+The `Confident<T>` class is available in the library with the same methods. When the JSON schema has the Confident shape (`value` + `confidence` + `reasoning` properties), the runtime automatically wraps the result. See the [Library Error Handling](/library/error-handling) guide for catching `ConfidenceTooLow`.
+
+```typescript
+import { think, Confident, ConfidenceTooLow } from "thinklang";
+
+const result = await think<Confident<{ label: string }>>({
+  prompt: "Classify this product",
+  jsonSchema: {
+    type: "object",
+    properties: {
+      value: { type: "object", properties: { label: { type: "string" } }, required: ["label"] },
+      confidence: { type: "number" },
+      reasoning: { type: "string" },
+    },
+    required: ["value", "confidence", "reasoning"],
+  },
+});
+
+// Same methods as in the language
+const safe = result.expect(0.8);        // throws ConfidenceTooLow if < 0.8
+const fallback = result.or({ label: "unknown" });
+const isReliable = result.isConfident(0.9);
+const mapped = result.map(v => v.label.toUpperCase());
+```

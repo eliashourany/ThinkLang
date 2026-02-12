@@ -116,6 +116,10 @@ class TypeChecker {
         // Already registered in constructor
         break;
 
+      case "ToolDeclaration":
+        this.checkToolDeclaration(stmt);
+        break;
+
       case "FunctionDeclaration":
         this.checkFunctionDeclaration(stmt);
         break;
@@ -160,6 +164,32 @@ class TypeChecker {
         }
         break;
     }
+  }
+
+  private checkToolDeclaration(decl: AST.ToolDeclarationNode): void {
+    const childScope = this.scope.child();
+    const prevScope = this.scope;
+    this.scope = childScope;
+
+    for (const param of decl.params) {
+      const paramType = this.resolveTypeExpr(param.typeExpr);
+      this.scope.define(param.name, paramType);
+    }
+
+    for (const stmt of decl.body) {
+      this.checkStatement(stmt);
+    }
+
+    this.scope = prevScope;
+
+    // Register tool as a function in parent scope
+    const paramTypes = decl.params.map(p => this.resolveTypeExpr(p.typeExpr));
+    const returnType = this.resolveTypeExpr(decl.returnType);
+    this.scope.define(decl.name, {
+      kind: "function",
+      params: paramTypes,
+      returnType,
+    });
   }
 
   private checkFunctionDeclaration(decl: AST.FunctionDeclarationNode): void {
@@ -266,6 +296,18 @@ class TypeChecker {
         return this.resolveTypeExpr(expr.typeArgument);
 
       case "ReasonBlock":
+        return this.resolveTypeExpr(expr.typeArgument);
+
+      case "AgentExpression":
+        return this.resolveTypeExpr(expr.typeArgument);
+
+      case "BatchExpression":
+        return { kind: "array", elementType: this.resolveTypeExpr(expr.typeArgument) };
+
+      case "MapThinkExpression":
+        return { kind: "array", elementType: this.resolveTypeExpr(expr.typeArgument) };
+
+      case "ReduceThinkExpression":
         return this.resolveTypeExpr(expr.typeArgument);
 
       case "PipelineExpression": {

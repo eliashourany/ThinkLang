@@ -23,6 +23,13 @@ const BUILTIN_SIGNATURES: Record<string, SignatureInformation> = {
     ],
     documentation: "Infer a structured value from the given input",
   },
+  agent: {
+    label: "agent<Type>(prompt: string)",
+    parameters: [
+      { label: "prompt", documentation: "The goal prompt for the agent" },
+    ],
+    documentation: "Run an agentic loop with tools to accomplish the given goal",
+  },
 };
 
 export function provideSignatureHelp(

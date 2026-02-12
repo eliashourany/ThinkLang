@@ -19,7 +19,7 @@ export interface ThinkOptions {
   uncertain?: boolean;
 }
 
-export async function think(options: ThinkOptions): Promise<unknown> {
+export async function think<T = unknown>(options: ThinkOptions): Promise<T> {
   const {
     jsonSchema: rawSchema,
     prompt,
@@ -52,10 +52,10 @@ export async function think(options: ThinkOptions): Promise<unknown> {
   // Check cache first
   const cached = globalCache.get(prompt, effectiveContext, jsonSchema);
   if (cached !== undefined) {
-    return cached;
+    return cached as T;
   }
 
-  const execute = async () => {
+  const execute = async (): Promise<T> => {
     const provider = getProvider();
     const { systemPrompt, userMessage } = buildThinkPrompt(prompt, effectiveContext);
 
@@ -88,10 +88,10 @@ export async function think(options: ThinkOptions): Promise<unknown> {
     // Wrap in Confident if the schema has the Confident shape
     if (isConfidentSchema(jsonSchema)) {
       const r = result as any;
-      return new Confident(r.value, r.confidence, r.reasoning ?? "");
+      return new Confident(r.value, r.confidence, r.reasoning ?? "") as T;
     }
 
-    return result;
+    return result as T;
   };
 
   if (retryCount && retryCount > 0) {

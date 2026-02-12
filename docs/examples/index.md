@@ -1,6 +1,6 @@
 # ThinkLang Examples
 
-This page provides an overview of the example programs shipped with ThinkLang. Each example demonstrates a different language feature or pattern. Source files are in the `examples/` directory.
+This page provides an overview of the example programs shipped with ThinkLang. Examples are available for both the ThinkLang language (`.tl` files) and the JS/TS library. Source files are in the `examples/` directory.
 
 ---
 
@@ -348,6 +348,99 @@ print result
 No `export` keyword needed. Paths are relative. Circular imports are detected.
 
 ---
+
+---
+
+## Library Examples (JS/TS)
+
+ThinkLang's runtime can be used directly from JavaScript or TypeScript. These examples are in `examples/js/`.
+
+### Basic think() Call
+
+```typescript
+import { think } from "thinklang";
+
+const greeting = await think<string>({
+  prompt: "Say hello to the world in a creative way",
+  jsonSchema: { type: "string" },
+});
+console.log(greeting);
+```
+
+*Source: `examples/js/basic-think.ts`*
+
+---
+
+### Zod Schemas for Typed Output
+
+```typescript
+import { z } from "zod";
+import { think, zodSchema } from "thinklang";
+
+const Sentiment = z.object({
+  label: z.enum(["positive", "negative", "neutral"]),
+  score: z.number(),
+  explanation: z.string(),
+});
+
+const result = await think<z.infer<typeof Sentiment>>({
+  prompt: "Analyze the sentiment of: 'This is the best product I have ever used!'",
+  ...zodSchema(Sentiment),
+});
+
+console.log(`Sentiment: ${result.label} (${result.score})`);
+```
+
+*Source: `examples/js/with-zod.ts`*
+
+---
+
+### Agent with Tools
+
+```typescript
+import { z } from "zod";
+import { agent, defineTool, zodSchema } from "thinklang";
+
+const searchDocs = defineTool({
+  name: "searchDocs",
+  description: "Search internal documentation",
+  input: z.object({ query: z.string() }),
+  execute: async ({ query }) => `Results for "${query}": ...`,
+});
+
+const result = await agent<{ answer: string; sources: string[] }>({
+  prompt: "How does ThinkLang handle type safety?",
+  tools: [searchDocs],
+  maxTurns: 5,
+  ...zodSchema(z.object({ answer: z.string(), sources: z.array(z.string()) })),
+});
+
+console.log(result.data.answer);
+console.log(`Completed in ${result.turns} turns`);
+```
+
+*Source: `examples/js/agent-tools.ts`*
+
+---
+
+### All Library Examples
+
+| File | Feature |
+|------|---------|
+| `examples/js/basic-think.ts` | Minimal `think()` call |
+| `examples/js/with-zod.ts` | Zod schemas for typed output |
+| `examples/js/explicit-init.ts` | Explicit `init()` with options |
+| `examples/js/custom-provider.ts` | Custom `ModelProvider` implementation |
+| `examples/js/cost-tracking.ts` | Token usage and cost monitoring |
+| `examples/js/agent-tools.ts` | Agent with tools |
+| `examples/js/multi-provider.ts` | Using different providers |
+| `examples/js/batch-processing.ts` | Batch processing with concurrency |
+| `examples/js/dataset-pipeline.ts` | Lazy Dataset pipeline with map/filter |
+| `examples/js/chunking-streaming.ts` | Text chunking and streaming |
+
+---
+
+## ThinkLang Language Examples (.tl)
 
 ## Example Index
 

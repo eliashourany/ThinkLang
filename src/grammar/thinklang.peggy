@@ -1,5 +1,5 @@
 {{
-// ThinkLang PEG Grammar — Phase 1 & Phase 2
+// ThinkLang PEG Grammar — Phase 1, Phase 2 & Phase 4 (Agentic)
 }}
 
 {
@@ -53,6 +53,7 @@ StatementList
 
 Statement
   = TypeDeclaration
+  / ToolDeclaration
   / FunctionDeclaration
   / LetDeclaration
   / PrintStatement
@@ -99,6 +100,21 @@ FunctionDeclaration
       name,
       params,
       returnType: returnType ? returnType[2] : null,
+      body,
+      location: loc()
+    };
+  }
+
+// ─── Phase 4: Tool Declaration ──────────────────────────
+
+ToolDeclaration
+  = "tool" _ name:Identifier _ "(" _ params:ParamList _ ")" _ ":" _ returnType:TypeExpression _ desc:("@" _ "description" _ "(" _ StringLiteralValue _ ")")? _ "{" __ body:StatementList __ "}" {
+    return {
+      type: "ToolDeclaration",
+      name,
+      params,
+      returnType,
+      description: desc ? desc[6] : null,
       body,
       location: loc()
     };
@@ -342,6 +358,10 @@ PrimaryExpression
   = ThinkExpression
   / InferExpression
   / ReasonBlock
+  / AgentExpression
+  / BatchExpression
+  / MapThinkExpression
+  / ReduceThinkExpression
   / MatchExpression
   / ObjectLiteral
   / ArrayLiteral
@@ -383,6 +403,96 @@ InferExpression
       onFail: onFail ? onFail[1] : null,
       location: loc()
     };
+  }
+
+// ─── Phase 4: Agent Expression ───────────────────────────
+
+AgentExpression
+  = "agent" _ "<" _ typeArg:TypeExpression _ ">" _ "(" _ prompt:Expression _ ")" withTools:(__ WithToolsClause)? withCtx:(__ WithClause)? maxTurns:(__ MaxTurnsClause)? guard:(__ GuardClause)? onFail:(__ OnFailClause)? {
+    return {
+      type: "AgentExpression",
+      typeArgument: typeArg,
+      prompt,
+      tools: withTools ? withTools[1] : [],
+      withContext: withCtx ? withCtx[1] : null,
+      maxTurns: maxTurns ? maxTurns[1] : null,
+      guard: guard ? guard[1] : null,
+      onFail: onFail ? onFail[1] : null,
+      location: loc()
+    };
+  }
+
+// ─── Phase 5: Big Data Expressions ──────────────────────
+
+BatchExpression
+  = "batch" _ "<" _ typeArg:TypeExpression _ ">" _ "(" _ items:Expression _ "," _ processor:Expression _ ")" concurrency:(__ ConcurrencyClause)? costBudget:(__ CostBudgetClause)? onError:(__ OnErrorClause)? {
+    return {
+      type: "BatchExpression",
+      typeArgument: typeArg,
+      items,
+      processor,
+      concurrency: concurrency ? concurrency[1] : null,
+      costBudget: costBudget ? costBudget[1] : null,
+      onError: onError ? onError[1] : null,
+      location: loc()
+    };
+  }
+
+MapThinkExpression
+  = "map_think" _ "<" _ typeArg:TypeExpression _ ">" _ "(" _ items:Expression _ "," _ promptTemplate:Expression _ ")" concurrency:(__ ConcurrencyClause)? costBudget:(__ CostBudgetClause)? withCtx:(__ WithClause)? {
+    return {
+      type: "MapThinkExpression",
+      typeArgument: typeArg,
+      items,
+      promptTemplate,
+      concurrency: concurrency ? concurrency[1] : null,
+      costBudget: costBudget ? costBudget[1] : null,
+      withContext: withCtx ? withCtx[1] : null,
+      location: loc()
+    };
+  }
+
+ReduceThinkExpression
+  = "reduce_think" _ "<" _ typeArg:TypeExpression _ ">" _ "(" _ items:Expression _ "," _ prompt:Expression _ ")" batchSize:(__ BatchSizeClause)? withCtx:(__ WithClause)? {
+    return {
+      type: "ReduceThinkExpression",
+      typeArgument: typeArg,
+      items,
+      prompt,
+      batchSize: batchSize ? batchSize[1] : null,
+      withContext: withCtx ? withCtx[1] : null,
+      location: loc()
+    };
+  }
+
+ConcurrencyClause
+  = "concurrency" _ ":" _ count:Integer {
+    return count;
+  }
+
+CostBudgetClause
+  = "cost_budget" _ ":" _ amount:Number {
+    return amount;
+  }
+
+OnErrorClause
+  = "on_error" _ ":" _ strategy:("fail_fast" / "continue") {
+    return strategy === "fail_fast" ? "fail-fast" : "continue";
+  }
+
+BatchSizeClause
+  = "batch_size" _ ":" _ size:Integer {
+    return size;
+  }
+
+WithToolsClause
+  = "with" _ "tools" _ ":" _ head:Identifier tail:(_ "," _ Identifier)* {
+    return [head, ...tail.map(t => t[3])];
+  }
+
+MaxTurnsClause
+  = "max" _ "turns" _ ":" _ count:Integer {
+    return count;
   }
 
 // ─── With / Without Context ───────────────────────────────
@@ -628,7 +738,9 @@ ReservedWord
   = ("type" / "fn" / "let" / "print" / "think" / "infer"
     / "match" / "try" / "catch" / "if" / "else" / "true" / "false" / "null"
     / "Confident" / "string" / "int" / "float" / "bool"
-    / "test" / "assert" / "import" / "from") !IdentContinue
+    / "test" / "assert" / "import" / "from"
+    / "tool" / "agent"
+    / "batch" / "map_think" / "reduce_think") !IdentContinue
 
 // ─── Whitespace & Comments ────────────────────────────────
 

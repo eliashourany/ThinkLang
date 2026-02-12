@@ -146,7 +146,7 @@ try {
 
 Each `catch` clause specifies an error type name and a binding variable.
 
-Catchable error types: `SchemaViolation`, `ConfidenceTooLow`, `GuardFailed`, `TokenBudgetExceeded`, `ModelUnavailable`, `Timeout`.
+Catchable error types: `SchemaViolation`, `ConfidenceTooLow`, `GuardFailed`, `TokenBudgetExceeded`, `ModelUnavailable`, `Timeout`, `AgentMaxTurnsError`, `ToolExecutionError`.
 
 ### `if` / `else`
 
@@ -195,6 +195,27 @@ Two forms:
 assert count > 0
 assert.semantic(summary, "mentions key financial metrics")
 ```
+
+### `tool` -- Tool Declaration
+
+Declares a tool that an AI agent can call. Tools have typed parameters, a return type, a description annotation, and a body.
+
+```thinklang
+tool getWeather(city: string): string @description("Get current weather for a city") {
+  let data = fetchWeatherAPI(city)
+  return data
+}
+```
+
+| Part | Required | Description |
+|------|----------|-------------|
+| Name | Yes | Tool identifier |
+| Parameters | Yes (may be empty) | Comma-separated `name: Type` pairs |
+| Return type | Yes | `: Type` after the parameter list |
+| `@description` | No (recommended) | Annotation that helps the AI understand when to use the tool |
+| Body | Yes | Block of statements in `{ }` |
+
+Tools compile into `defineTool()` calls at runtime and are made available to `agent` expressions.
 
 ### Expression Statement
 
@@ -333,6 +354,91 @@ let response = match sentiment {
 | `== value` | `{ label: == "positive" }` | Equality |
 | `!= value` | `{ label: != "unknown" }` | Inequality |
 | Literal | `{ label: "positive" }` | Literal equality |
+
+### `agent<T>(prompt)`
+
+Agentic loop expression. Sends a prompt to the LLM, which calls tools as needed until it produces a final answer conforming to type `T`.
+
+```thinklang
+let answer = agent<WeatherReport>("What is the weather in Tokyo?")
+  with tools: getWeather
+  max turns: 5
+```
+
+Full syntax with all optional clauses:
+
+```thinklang
+let plan = agent<TripPlan>("Plan a trip to Barcelona")
+  with tools: getWeather, searchPlaces, getFlightPrice
+  with context: userPreferences
+  max turns: 8
+  guard { length: 50..1000 }
+  on_fail: retry(2)
+```
+
+| Clause | Required | Description |
+|--------|----------|-------------|
+| `with tools:` | Yes | Comma-separated list of tool names the agent can call |
+| `with context:` | No | Context data |
+| `without context:` | No | Keys to exclude |
+| `max turns: N` | No | Maximum loop iterations (default: 10) |
+| `guard { ... }` | No | Guard rules for the final output |
+| `on_fail:` | No | Retry/fallback strategy |
+
+### `batch<T>(items, processor)` -- Batch Expression
+
+Process a collection of items with concurrency control.
+
+```thinklang
+let results = batch<string>(items, processor)
+  concurrency: 3
+  cost_budget: 1.00
+  on_error: continue
+```
+
+| Clause | Required | Description |
+|--------|----------|-------------|
+| `concurrency: N` | No | Max parallel operations (default: 5) |
+| `cost_budget: N` | No | Stop when cost exceeds $N |
+| `on_error: strategy` | No | `fail_fast` or `continue` (default) |
+
+---
+
+### `map_think<T>(items, prompt)` -- Map Think Expression
+
+Apply `think()` to each item in a collection.
+
+```thinklang
+let sentiments = map_think<Sentiment>(reviews, "Classify this review")
+  concurrency: 5
+  cost_budget: 2.00
+  with context: { config }
+```
+
+| Clause | Required | Description |
+|--------|----------|-------------|
+| `concurrency: N` | No | Max parallel operations |
+| `cost_budget: N` | No | Cost budget in USD |
+| `with context:` | No | Shared context for all items |
+
+---
+
+### `reduce_think<T>(items, prompt)` -- Reduce Think Expression
+
+Aggregate items via tree-reduction through AI.
+
+```thinklang
+let summary = reduce_think<string>(paragraphs, "Summarize")
+  batch_size: 5
+  with context: { style }
+```
+
+| Clause | Required | Description |
+|--------|----------|-------------|
+| `batch_size: N` | No | Items per reduction batch (default: 10) |
+| `with context:` | No | Additional context |
+
+---
 
 ### Pipeline `|>`
 
@@ -502,7 +608,8 @@ The following words cannot be used as identifiers:
 | | | | | |
 |---|---|---|---|---|
 | `type` | `fn` | `let` | `print` | `think` |
-| `infer` | `match` | `try` | `catch` | `if` |
-| `else` | `true` | `false` | `null` | `Confident` |
-| `string` | `int` | `float` | `bool` | `test` |
-| `assert` | `import` | `from` | | |
+| `infer` | `reason` | `match` | `try` | `catch` |
+| `if` | `else` | `true` | `false` | `null` |
+| `Confident` | `string` | `int` | `float` | `bool` |
+| `test` | `assert` | `import` | `from` | `tool` |
+| `agent` | `batch` | `map_think` | `reduce_think` | |

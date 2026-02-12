@@ -1,12 +1,70 @@
 # ThinkLang Runtime API Reference
 
-The ThinkLang runtime is the TypeScript library that executes compiled ThinkLang programs. It provides AI integration, confidence tracking, guards, caching, cost tracking, and error handling.
+The ThinkLang runtime is a TypeScript library that powers both compiled ThinkLang programs and direct JS/TS usage. It provides AI integration, confidence tracking, guards, caching, cost tracking, and error handling.
+
+Install and use directly in any JS/TS project:
+
+```bash
+npm install thinklang
+```
+
+```typescript
+import { init, think, infer, reason, agent, defineTool, zodSchema, batch, mapThink, reduceThink, Dataset, chunkText, streamThink } from "thinklang";
+```
+
+---
+
+## Initialization
+
+### `init(options?: InitOptions): void`
+
+Convenience function to configure the runtime. Auto-detects the provider from environment variables or API key format.
+
+```typescript
+interface InitOptions {
+  provider?: string | ModelProvider;  // Provider name or custom instance
+  apiKey?: string;                     // API key (auto-detected from env if omitted)
+  model?: string;                      // Defaults to process.env.THINKLANG_MODEL or provider default
+  baseUrl?: string;                    // Custom base URL (for Ollama or proxied endpoints)
+}
+```
+
+**Usage:**
+
+```typescript
+// Auto-detect from environment
+init();
+
+// Explicit Anthropic configuration
+init({ apiKey: "sk-ant-...", model: "claude-sonnet-4-20250514" });
+
+// Use OpenAI
+init({ provider: "openai", apiKey: "sk-..." });
+
+// Use Google Gemini
+init({ provider: "gemini", apiKey: "AI..." });
+
+// Use Ollama (local, no API key needed)
+init({ provider: "ollama", model: "llama3" });
+
+// Use a custom ModelProvider instance
+init({ provider: myCustomProvider });
+```
+
+**Auto-detection order:**
+
+1. If `provider` is specified, use it directly.
+2. If `apiKey` starts with `sk-ant-`, use Anthropic; `sk-`, use OpenAI; `AI`, use Gemini.
+3. Check environment variables: `ANTHROPIC_API_KEY` > `OPENAI_API_KEY` > `GEMINI_API_KEY` > `OLLAMA_BASE_URL`.
+4. Fall back to Anthropic.
+
+If you don't call `init()`, the runtime auto-initializes from environment variables on first AI call.
 
 ---
 
 ## Core Functions
 
-### `think(options: ThinkOptions): Promise<unknown>`
+### `think<T = unknown>(options: ThinkOptions): Promise<T>`
 
 Sends a prompt to the configured LLM and returns a structured response conforming to the provided JSON Schema.
 
@@ -44,7 +102,7 @@ let result = think<MyType>("Analyze this data")
 
 ---
 
-### `infer(options: InferOptions): Promise<unknown>`
+### `infer<T = unknown>(options: InferOptions): Promise<T>`
 
 Lightweight inference. Transforms, classifies, or derives a new value from an existing one.
 
@@ -74,7 +132,7 @@ let lang = infer<string>("Bonjour le monde", "Detect the language")
 
 ---
 
-### `reason(options: ReasonOptions): Promise<unknown>`
+### `reason<T = unknown>(options: ReasonOptions): Promise<T>`
 
 Multi-step reasoning. Guides the LLM through numbered steps toward a stated goal.
 
@@ -331,6 +389,312 @@ class Timeout extends ThinkError {
 
 ---
 
+## Agent
+
+### `agent<T = unknown>(options: AgentOptions): Promise<AgentResult<T>>`
+
+Runs an agentic loop: the LLM calls tools until it produces a final answer.
+
+```typescript
+interface AgentOptions {
+  prompt: string;                        // The goal for the agent
+  tools: Tool[];                         // Tools the agent can call
+  context?: Record<string, unknown>;     // Context data
+  maxTurns?: number;                     // Maximum loop iterations (default: 10)
+  model?: string;                        // Model override
+  jsonSchema?: Record<string, unknown>;  // JSON Schema for the final output
+  schemaName?: string;                   // Optional schema name
+  guards?: GuardRule[];                  // Validation rules for the final output
+  retryCount?: number;                   // Retry the entire loop on failure
+  fallback?: () => unknown;              // Fallback if all retries fail
+  onToolCall?: (call: ToolCall) => void; // Called before each tool executes
+  onToolResult?: (result: ToolResult & { toolName: string }) => void;  // Called after each tool
+  abortSignal?: AbortSignal;             // Cancel the agent loop
+}
+
+interface AgentResult<T = unknown> {
+  data: T;                                                  // The final answer
+  turns: number;                                            // Number of loop iterations
+  totalUsage: UsageInfo;                                    // Aggregated token usage
+  toolCallHistory: Array<{ call: ToolCall; result: ToolResult }>;  // Full tool call log
+}
+```
+
+**Behavior:**
+
+1. Sends the prompt to the LLM along with tool definitions.
+2. If the LLM returns tool calls, executes each tool and feeds results back.
+3. Repeats until the LLM produces a final answer or `maxTurns` is reached.
+4. Applies guards to the final result (if configured).
+5. Records aggregated usage in the global `CostTracker`.
+6. Throws `AgentMaxTurnsError` if the turn limit is reached without a final answer.
+
+**Corresponding ThinkLang syntax:**
+
+```thinklang
+let answer = agent<string>("Find the answer")
+  with tools: searchDocs, readFile
+  max turns: 5
+```
+
+---
+
+## Tools
+
+### `defineTool<TInput, TOutput>(config): Tool<TInput, TOutput>`
+
+Creates a tool that can be used by the agent runtime. Accepts Zod schemas or raw JSON Schema for the input.
+
+```typescript
+interface DefineToolConfig<TInput, TOutput> {
+  name: string;                                    // Tool identifier
+  description: string;                             // Helps the AI decide when to use this tool
+  input: ZodType<TInput> | Record<string, unknown>;  // Input schema (Zod or JSON Schema)
+  execute: (input: TInput) => Promise<TOutput>;    // Function that runs when the tool is called
+}
+
+interface Tool<TInput = unknown, TOutput = unknown> {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  execute: (input: TInput) => Promise<TOutput>;
+}
+```
+
+**Example:**
+
+```typescript
+import { defineTool } from "thinklang";
+import { z } from "zod";
+
+const searchDocs = defineTool({
+  name: "searchDocs",
+  description: "Search internal documentation",
+  input: z.object({ query: z.string() }),
+  execute: async ({ query }) => await docsIndex.search(query),
+});
+```
+
+### `toolToDefinition(tool: Tool): ToolDefinition`
+
+Converts a `Tool` to the `ToolDefinition` format used internally by providers.
+
+### Built-in Tools
+
+ThinkLang ships with opt-in built-in tools:
+
+| Tool | Input | Output | Description |
+|------|-------|--------|-------------|
+| `fetchUrl` | `{ url: string }` | `string` | HTTP GET a URL |
+| `readFile` | `{ path: string }` | `string` | Read a local file |
+| `writeFile` | `{ path: string, content: string }` | `void` | Write to a local file |
+| `runCommand` | `{ command: string }` | `{ stdout, stderr, exitCode }` | Run a shell command |
+
+```typescript
+import { agent, readFile, fetchUrl } from "thinklang";
+```
+
+---
+
+## Big Data
+
+### `batch<T, U>(options: BatchOptions<T, U>): Promise<BatchResult<T, U>>`
+
+Process an array of items with concurrency control, cost budgeting, and error handling.
+
+```typescript
+interface BatchOptions<T, U> {
+  items: T[];
+  processor: (item: T, index: number) => Promise<U>;
+  maxConcurrency?: number;      // Default: 5
+  costBudget?: number;          // USD threshold — stops when exceeded
+  onError?: "fail-fast" | "continue";  // Default: "continue"
+  onItemComplete?: (event: BatchItemEvent<T, U>) => void;
+  onProgress?: (progress: BatchProgress) => void;
+  abortSignal?: AbortSignal;
+  rateLimit?: number;           // Min ms between item starts
+}
+
+interface BatchResult<T, U> {
+  results: Array<{ index: number; item: T; data: U }>;
+  errors: Array<{ index: number; item: T; error: Error }>;
+  totalItems: number;
+  successCount: number;
+  errorCount: number;
+  totalCostUsd: number;
+  totalDurationMs: number;
+}
+```
+
+**Corresponding ThinkLang syntax:**
+
+```thinklang
+let results = batch<string>(items, processor)
+  concurrency: 5
+  cost_budget: 1.00
+  on_error: continue
+```
+
+---
+
+### `mapThink<T, U>(options: MapThinkOptions<T>): Promise<MapThinkResult<U>>`
+
+Apply `think()` to each item in a collection. Simpler API for the common case of mapping items through AI.
+
+```typescript
+interface MapThinkOptions<T> {
+  items: T[];
+  promptTemplate: (item: T, index: number) => string;
+  jsonSchema: Record<string, unknown>;
+  schemaName?: string;
+  context?: Record<string, unknown>;
+  maxConcurrency?: number;      // Default: 5
+  costBudget?: number;
+  onError?: "fail-fast" | "continue";
+  abortSignal?: AbortSignal;
+}
+```
+
+**Corresponding ThinkLang syntax:**
+
+```thinklang
+let sentiments = map_think<Sentiment>(reviews, "Classify this review")
+  concurrency: 5
+  cost_budget: 1.00
+```
+
+---
+
+### `reduceThink<T, U>(options: ReduceThinkOptions<T>): Promise<U>`
+
+Aggregate items via tree-reduction: items are batched, each batch is summarized by the LLM, then summaries are recursively reduced.
+
+```typescript
+interface ReduceThinkOptions<T> {
+  items: T[];
+  prompt: string;
+  jsonSchema: Record<string, unknown>;
+  schemaName?: string;
+  batchSize?: number;           // Default: 10
+  context?: Record<string, unknown>;
+  maxConcurrency?: number;      // Default: 3
+}
+```
+
+**Corresponding ThinkLang syntax:**
+
+```thinklang
+let summary = reduce_think<string>(paragraphs, "Summarize")
+  batch_size: 5
+```
+
+---
+
+### `Dataset<T>`
+
+Lazy, chainable collection for building data pipelines.
+
+```typescript
+class Dataset<T> {
+  static from<T>(items: T[]): Dataset<T>;
+  static range(start: number, end: number): Dataset<number>;
+
+  map<U>(fn: (item: T, index: number) => Promise<U> | U): Dataset<U>;
+  filter(fn: (item: T, index: number) => Promise<boolean> | boolean): Dataset<T>;
+  flatMap<U>(fn: (item: T, index: number) => Promise<U[]> | U[]): Dataset<U>;
+  batch(size: number): Dataset<T[]>;
+
+  execute(options?: DatasetExecuteOptions): Promise<DatasetResult<T>>;
+  reduce<U>(fn: (acc: U, item: T, index: number) => Promise<U> | U, initial: U): Promise<U>;
+
+  readonly length: number;
+}
+
+interface DatasetExecuteOptions {
+  maxConcurrency?: number;
+  costBudget?: number;
+  onError?: "fail-fast" | "continue";
+  onItemComplete?: (event: { index: number; durationMs: number }) => void;
+  onProgress?: (progress: { completed: number; total: number; costSoFar: number }) => void;
+  abortSignal?: AbortSignal;
+  rateLimit?: number;
+}
+
+class DatasetResult<T> {
+  toArray(): T[];
+  readonly length: number;
+  first(): T | undefined;
+  last(): T | undefined;
+  take(n: number): T[];
+  [Symbol.iterator](): Iterator<T>;
+}
+```
+
+---
+
+### `chunkText(text: string, options?: TextChunkOptions): ChunkResult<string>`
+
+Split large text into chunks that fit within LLM context windows.
+
+```typescript
+interface TextChunkOptions {
+  maxChars?: number;
+  maxTokens?: number;           // ~4 chars per token
+  strategy?: "paragraph" | "sentence" | "fixed";  // Default: "paragraph"
+  overlap?: number;             // Character overlap between chunks
+}
+
+interface ChunkResult<T> {
+  chunks: T[];
+  totalChunks: number;
+}
+```
+
+### `chunkArray<T>(items: T[], options: ArrayChunkOptions): ChunkResult<T[]>`
+
+Split an array into fixed-size chunks.
+
+### `estimateTokens(text: string): number`
+
+Approximate token count (~4 chars per token).
+
+---
+
+### `streamThink<T>(options: StreamThinkOptions): AsyncGenerator<StreamEvent<T>>`
+
+Process large text by chunking and yielding results as each chunk completes.
+
+```typescript
+interface StreamEvent<T> {
+  index: number;
+  data: T;
+  totalChunks: number;
+}
+```
+
+### `streamInfer<T>(options: StreamInferOptions): AsyncGenerator<StreamEvent<T>>`
+
+Process an array of values one at a time via `infer()`, yielding each result.
+
+### `collectStream<T>(gen: AsyncGenerator<StreamEvent<T>>): Promise<T[]>`
+
+Collect all items from a stream into an array.
+
+---
+
+### `BatchCostBudgetExceeded`
+
+Thrown when a batch operation exceeds its cost budget.
+
+```typescript
+class BatchCostBudgetExceeded extends Error {
+  readonly budget: number;
+  readonly spent: number;
+}
+```
+
+---
+
 ## CostTracker
 
 Tracks token usage and estimated costs across all AI operations.
@@ -345,7 +709,7 @@ Records a usage entry.
 
 ```typescript
 record(opts: {
-  operation: "think" | "infer" | "reason" | "semantic_assert";
+  operation: "think" | "infer" | "reason" | "agent" | "semantic_assert" | "batch" | "map_think" | "reduce_think";
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -383,7 +747,7 @@ Returns a copy of all individual usage records.
 ```typescript
 interface UsageRecord {
   timestamp: number;
-  operation: "think" | "infer" | "reason" | "semantic_assert";
+  operation: "think" | "infer" | "reason" | "agent" | "semantic_assert" | "batch" | "map_think" | "reduce_think";
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -397,16 +761,40 @@ interface UsageRecord {
 
 Clears all recorded usage data.
 
+### `registerPricing(model, pricing): void`
+
+Register custom pricing for a model not in the built-in table. Pricing is per million tokens (USD).
+
+```typescript
+import { registerPricing } from "thinklang";
+registerPricing("my-custom-model", { input: 5, output: 20 });
+```
+
 ### Supported Model Pricing
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) |
 |-------|----------------------|------------------------|
+| **Anthropic** | | |
 | `claude-opus-4-6` | $15.00 | $75.00 |
 | `claude-sonnet-4-5-20250929` | $3.00 | $15.00 |
 | `claude-haiku-4-5-20251001` | $0.80 | $4.00 |
 | `claude-3-5-sonnet-20241022` | $3.00 | $15.00 |
 | `claude-3-5-haiku-20241022` | $0.80 | $4.00 |
 | `claude-3-opus-20240229` | $15.00 | $75.00 |
+| **OpenAI** | | |
+| `gpt-4o` | $2.50 | $10.00 |
+| `gpt-4o-mini` | $0.15 | $0.60 |
+| `gpt-4.1` | $2.00 | $8.00 |
+| `gpt-4.1-mini` | $0.40 | $1.60 |
+| `gpt-4.1-nano` | $0.10 | $0.40 |
+| `o3` | $10.00 | $40.00 |
+| `o4-mini` | $1.10 | $4.40 |
+| **Google Gemini** | | |
+| `gemini-2.0-flash` | $0.10 | $0.40 |
+| `gemini-2.5-pro` | $1.25 | $10.00 |
+| `gemini-2.5-flash` | $0.15 | $0.60 |
+
+Models not in the table use a default estimate of $3/$15 per million tokens. Use `registerPricing()` to set accurate costs for custom models.
 
 ---
 
@@ -449,21 +837,58 @@ interface ModelProvider {
 interface CompleteOptions {
   systemPrompt: string;
   userMessage: string;
-  jsonSchema: Record<string, unknown>;
+  jsonSchema?: Record<string, unknown>;       // JSON Schema for structured output
   schemaName?: string;
   model?: string;
   maxTokens?: number;
+  tools?: ToolDefinition[];                   // Tool definitions for agent mode
+  toolChoice?: "auto" | "required" | "none" | { name: string };
+  messages?: Message[];                       // Conversation history for agent mode
+  stopSequences?: string[];
 }
 
 interface CompleteResult {
   data: unknown;
   usage: UsageInfo;
   model: string;
+  toolCalls?: ToolCall[];                     // Tool calls made by the LLM
+  stopReason?: "end_turn" | "tool_use" | "max_tokens" | "stop_sequence";
 }
 
 interface UsageInfo {
   inputTokens: number;
   outputTokens: number;
+}
+```
+
+### Tool Calling Types
+
+These types support the agent runtime's tool-calling protocol:
+
+```typescript
+interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+interface ToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+interface ToolResult {
+  toolCallId: string;
+  output: unknown;
+  isError?: boolean;
+}
+
+interface Message {
+  role: "user" | "assistant" | "tool_result";
+  content: string;
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
 }
 ```
 
@@ -473,16 +898,46 @@ Registers a `ModelProvider` as the active provider for all AI calls.
 
 ### `getProvider(): ModelProvider`
 
-Returns the currently configured provider. Throws if no provider has been set.
+Returns the currently configured provider. If no provider has been explicitly set, auto-initializes from environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY`). Throws if no provider is configured and no env var is available.
 
-### `AnthropicProvider`
+### Provider Registry
 
-The built-in provider that uses the Anthropic SDK. Configured automatically when `ANTHROPIC_API_KEY` is set.
+#### `registerProvider(name: string, factory: ProviderFactory): void`
+
+Registers a provider factory so it can be referenced by name in `init()` and `createProvider()`.
 
 ```typescript
-class AnthropicProvider implements ModelProvider {
-  constructor(apiKey: string)
+type ProviderFactory = (options: ProviderOptions) => ModelProvider;
+
+interface ProviderOptions {
+  apiKey?: string;
+  model?: string;
+  baseUrl?: string;
 }
+```
+
+#### `createProvider(name: string, options?: ProviderOptions): ModelProvider`
+
+Creates a provider instance from the registry by name.
+
+#### `getRegisteredProviders(): string[]`
+
+Returns the names of all registered providers.
+
+### Built-in Providers
+
+| Provider | Class | Package | Auto-detected from |
+|----------|-------|---------|-------------------|
+| `"anthropic"` | `AnthropicProvider` | `@anthropic-ai/sdk` (included) | `ANTHROPIC_API_KEY` |
+| `"openai"` | `OpenAIProvider` | `openai` (peer dep) | `OPENAI_API_KEY` |
+| `"gemini"` | `GeminiProvider` | `@google/generative-ai` (peer dep) | `GEMINI_API_KEY` |
+| `"ollama"` | `OllamaProvider` | none (HTTP API) | `OLLAMA_BASE_URL` |
+
+OpenAI and Gemini require installing the corresponding SDK package as a peer dependency:
+
+```bash
+npm install openai                    # for OpenAI
+npm install @google/generative-ai     # for Google Gemini
 ```
 
 ---
@@ -522,3 +977,44 @@ interface ContextManagerOptions {
 ### `excludeFromContext(context, exclusions): Record<string, unknown>`
 
 Removes specified keys from the context object. Used by the `without context:` clause.
+
+---
+
+## Zod Schema Helper
+
+### `zodSchema<T>(schema: ZodType<T>): { jsonSchema: Record<string, unknown> }`
+
+Converts a Zod schema into the JSON Schema object expected by `think`, `infer`, and `reason`. The result spreads directly into the options object.
+
+```typescript
+import { z } from "zod";
+import { think, zodSchema } from "thinklang";
+
+const Sentiment = z.object({
+  label: z.enum(["positive", "negative", "neutral"]),
+  score: z.number(),
+});
+
+const result = await think<z.infer<typeof Sentiment>>({
+  prompt: "Analyze sentiment",
+  ...zodSchema(Sentiment),
+});
+```
+
+**Supported Zod types:**
+
+| Zod Type | JSON Schema |
+|----------|-------------|
+| `z.string()` | `{ type: "string" }` |
+| `z.number()` | `{ type: "number" }` |
+| `z.boolean()` | `{ type: "boolean" }` |
+| `z.enum([...])` | `{ type: "string", enum: [...] }` |
+| `z.array(T)` | `{ type: "array", items: T }` |
+| `z.object({...})` | `{ type: "object", properties: {...}, required: [...] }` |
+| `z.optional(T)` | Field excluded from `required` |
+| `z.nullable(T)` | `{ anyOf: [T, { type: "null" }] }` |
+| `z.union([...])` | `{ anyOf: [...] }` |
+| `z.literal(v)` | `{ type: ..., const: v }` |
+| `z.record(K, V)` | `{ type: "object", additionalProperties: V }` |
+
+Descriptions set via `.describe()` are preserved in the JSON Schema output.

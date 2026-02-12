@@ -2,262 +2,283 @@
 
 An AI-native programming language where `think` is a keyword.
 
-ThinkLang compiles to TypeScript that calls an LLM runtime, letting you write AI-powered programs with structured types, confidence tracking, guards, and pattern matching — all as first-class language features.
+ThinkLang compiles to TypeScript that calls an LLM runtime. Write AI-powered programs with structured types, agentic tool calling, confidence tracking, guards, and pattern matching — all as first-class language features. It's also usable as a standalone JS/TS library.
 
-```
-let greeting = think<string>("Say hello to the world in a creative way")
-print greeting
-```
+Model-agnostic: Anthropic, OpenAI, Gemini, Ollama, or bring your own provider.
 
-## Features
+---
 
-**AI Primitives** — `think`, `infer`, and `reason` are keywords, not library calls.
+## Two Ways to Use ThinkLang
+
+### As a Language
+
+Write `.tl` files and run them with the CLI. AI primitives are keywords, types compile to JSON schemas, and the compiler catches errors before you hit the API.
 
 ```
 type Sentiment {
   @description("positive, negative, or neutral")
   label: string
-  @description("Intensity from 1-10")
-  intensity: int
-}
-
-let sentiment = think<Confident<Sentiment>>("Analyze the sentiment of this review")
-  with context: review
-```
-
-**Type-Safe AI Output** — Define structured types that compile to JSON schemas. The LLM is constrained to return valid data matching your types.
-
-**Confidence Tracking** — `Confident<T>` wraps AI responses with confidence scores and reasoning. Use `.unwrap()`, `.expect(threshold)`, or `.or(fallback)` to handle uncertainty.
-
-**Guards** — Validate AI output with declarative constraints and automatic retry.
-
-```
-let summary = think<string>("Summarize this article")
-  with context: article
-  guard {
-    length: 50..200
-    contains_none: ["AI", "language model"]
-  }
-  on_fail: retry(3) then fallback("Could not generate summary")
-```
-
-**Pattern Matching** — Match on AI-generated structured data.
-
-```
-match sentiment {
-  { label: "positive", intensity: >= 8 } => print "Very positive!"
-  { label: "negative" } => print "Negative sentiment detected"
-  _ => print "Neutral or mild sentiment"
-}
-```
-
-**Pipeline Operator** — Chain AI operations with `|>`.
-
-**Reason Blocks** — Multi-step AI reasoning with explicit goals and steps.
-
-**Modules** — Split code across files with `import`. Types and functions are automatically importable.
-
-```
-import { Sentiment, analyzeSentiment } from "./types.tl"
-
-let result = analyzeSentiment("Great product!")
-print result
-```
-
-**Context Management** — Pass context to AI calls with `with context:` and exclude sensitive data with `without context:`.
-
-**Error Handling** — Typed error hierarchy (`SchemaViolation`, `ConfidenceTooLow`, `GuardFailed`, etc.) with `try`/`catch`.
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js 18+
-- An Anthropic API key
-
-### Install
-
-```bash
-# Global install
-npm install -g thinklang
-
-# Or use npx
-npx thinklang run hello.tl
-```
-
-### Configure
-
-Set the `ANTHROPIC_API_KEY` environment variable:
-
-```bash
-export ANTHROPIC_API_KEY=your-key-here
-```
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | — | Anthropic API key |
-| `THINKLANG_MODEL` | No | `claude-opus-4-6` | Model to use |
-| `THINKLANG_CACHE` | No | `true` | Enable response caching |
-
-### Run
-
-```bash
-# Run a program
-thinklang run hello.tl
-
-# Run with cost tracking
-thinklang run hello.tl --show-cost
-
-# Compile to TypeScript
-thinklang compile hello.tl
-
-# Interactive REPL
-thinklang repl
-```
-
-## Testing
-
-ThinkLang has a built-in test framework. Write tests in `.test.tl` files:
-
-```
-type Sentiment {
-  label: string
+  @description("Confidence score from 0 to 1")
   score: float
 }
 
-test "sentiment analysis returns valid result" {
-  let result = think<Sentiment>("Analyze: 'Great product!'")
-  assert result.label == "positive"
-  assert result.score > 0.5
-}
+let result = think<Sentiment>("Analyze the sentiment of this review")
+  with context: review
 
-test "semantic assertion" {
-  let response = think<string>("Write a greeting")
-  assert.semantic(response, "is a friendly greeting")
-}
+print result
 ```
-
-Run tests:
 
 ```bash
-# Run all tests
-thinklang test
-
-# Record snapshots for deterministic replay
-thinklang test --update-snapshots
-
-# Replay from snapshots (no API calls)
-thinklang test --replay
-
-# Filter by pattern
-thinklang test --pattern "sentiment"
+npm install -g thinklang
+thinklang run analyze.tl
 ```
 
-## Cost Tracking
+### As a JS/TS Library
 
-Every AI call tracks token usage and estimated cost:
+Use the same AI primitives directly from any JavaScript or TypeScript project — no `.tl` files needed.
+
+```typescript
+import { think, zodSchema } from "thinklang";
+import { z } from "zod";
+
+const Sentiment = z.object({
+  label: z.enum(["positive", "negative", "neutral"]),
+  score: z.number(),
+});
+
+const result = await think<z.infer<typeof Sentiment>>({
+  prompt: "Analyze the sentiment of this review",
+  ...zodSchema(Sentiment),
+  context: { review },
+});
+```
 
 ```bash
-# Show cost after running a program
-thinklang run program.tl --show-cost
-
-# View cost summary
-thinklang cost-report
+npm install thinklang
 ```
+
+---
+
+## Features
+
+### AI Primitives
+
+`think`, `infer`, and `reason` — three primitives for different tasks.
+
+**Language:**
+```
+let summary = think<Summary>("Summarize this article") with context: article
+let lang = infer<string>("Bonjour le monde", "Detect the language")
+let plan = reason<Plan> { goal: "Evaluate the portfolio" steps: 1. "Assess allocation" 2. "Identify risks" }
+```
+
+**Library:**
+```typescript
+const summary = await think({ prompt: "Summarize this article", ...zodSchema(Summary), context: { article } });
+const lang = await infer({ value: "Bonjour le monde", hint: "Detect the language", jsonSchema: { type: "string" } });
+const plan = await reason({ goal: "Evaluate the portfolio", steps: [...], ...zodSchema(Plan) });
+```
+
+### Agents & Tools
+
+Declare tools and run multi-turn agent loops. The agent calls tools until it arrives at a final answer.
+
+**Language:**
+```
+tool searchDocs(query: string): string @description("Search documentation") {
+  let result = think<string>("Search for relevant documentation") with context: query
+  print result
+}
+
+let answer = agent<string>("Find the answer to the user's question")
+  with tools: searchDocs
+  max turns: 5
+```
+
+**Library:**
+```typescript
+const searchDocs = defineTool({
+  name: "searchDocs",
+  description: "Search documentation",
+  input: z.object({ query: z.string() }),
+  execute: async ({ query }) => await docsIndex.search(query),
+});
+
+const result = await agent({ prompt: "Find the answer", tools: [searchDocs], maxTurns: 5 });
+```
+
+### Structured Types & Validation
+
+**Language** — Define types with annotations. The AI is constrained to return valid data:
+
+```
+type Classification {
+  @description("The category of the email")
+  category: string
+  @description("Confidence score from 0 to 1")
+  confidence: float
+}
+```
+
+**Library** — Use Zod schemas for the same type safety:
+
+```typescript
+const Classification = z.object({
+  category: z.string().describe("The category of the email"),
+  confidence: z.number().describe("Confidence score from 0 to 1"),
+});
+```
+
+### Guards
+
+Validate AI output with declarative constraints and automatic retry.
+
+**Language:**
+```
+let summary = think<string>("Summarize this article") with context: article
+  guard { length: 50..200, contains_none: ["AI", "language model"] }
+  on_fail: retry(3) then fallback("Could not generate summary")
+```
+
+**Library:**
+```typescript
+const summary = await think({
+  prompt: "Summarize this article",
+  jsonSchema: { type: "string" },
+  context: { article },
+  guards: [{ name: "length", constraint: 50, rangeEnd: 200 }],
+  retryCount: 3,
+  fallback: () => "Could not generate summary",
+});
+```
+
+### Confidence Tracking
+
+`Confident<T>` wraps AI responses with confidence scores and reasoning.
+
+```
+let result = think<Confident<Sentiment>>("Analyze this review") with context: review
+let safe = result.expect(0.8)           // throws if confidence < 0.8
+let fallback = result.or(defaultValue)  // returns fallback if not confident
+```
+
+### Big Data
+
+Process collections through AI at scale with concurrency control, cost budgeting, and streaming.
+
+**Language:**
+```
+let sentiments = map_think<Sentiment>(reviews, "Classify this review")
+  concurrency: 3
+  cost_budget: 1.00
+
+let summary = reduce_think<string>(sentiments, "Summarize all sentiments into a report")
+  batch_size: 5
+```
+
+**Library:**
+```typescript
+const results = await mapThink({
+  items: reviews,
+  promptTemplate: (r) => `Classify: "${r}"`,
+  ...zodSchema(Sentiment),
+  maxConcurrency: 3,
+  costBudget: 1.00,
+});
+
+const pipeline = await Dataset.from(reviews)
+  .map(async (r) => think({ prompt: `Classify: "${r}"`, ...zodSchema(Sentiment) }))
+  .filter(async (s) => s.label === "positive")
+  .execute({ maxConcurrency: 3 });
+```
+
+### Pattern Matching & Pipeline
+
+```
+let response = match sentiment {
+  { label: "positive", intensity: >= 8 } => "Very positive!"
+  { label: "negative" } => "Negative detected"
+  _ => "Neutral or mild"
+}
+
+let result = rawText
+  |> think<Keywords>("Extract keywords")
+  |> think<Report>("Write a report from these keywords")
+```
+
+### Multi-Provider
+
+Swap providers with a single environment variable. No code changes needed.
+
+| Provider | Package | Env Var | Default Model |
+|----------|---------|---------|---------------|
+| Anthropic | `@anthropic-ai/sdk` (bundled) | `ANTHROPIC_API_KEY` | `claude-opus-4-6` |
+| OpenAI | `openai` (optional) | `OPENAI_API_KEY` | `gpt-4o` |
+| Gemini | `@google/generative-ai` (optional) | `GEMINI_API_KEY` | `gemini-2.0-flash` |
+| Ollama | *(none)* | `OLLAMA_BASE_URL` | `llama3` |
+
+Custom providers are supported through the `ModelProvider` interface or `registerProvider()`.
+
+---
+
+## Quick Start: Language
+
+```bash
+npm install -g thinklang
+export ANTHROPIC_API_KEY=your-key-here    # or OPENAI_API_KEY, GEMINI_API_KEY
+```
+
+Create `hello.tl`:
+```
+let greeting = think<string>("Say hello to the world in a creative way")
+print greeting
+```
+
+```bash
+thinklang run hello.tl
+```
+
+| Command | Description |
+|---------|-------------|
+| `thinklang run <file.tl>` | Run a ThinkLang program |
+| `thinklang compile <file.tl>` | Emit compiled TypeScript |
+| `thinklang repl` | Interactive REPL |
+| `thinklang test [target]` | Run `.test.tl` test files |
+| `thinklang cost-report` | Show cost summary |
+
+## Quick Start: Library
+
+```bash
+npm install thinklang
+```
+
+```typescript
+import { think } from "thinklang";
+
+// Set ANTHROPIC_API_KEY (or any provider key) in your environment — it just works
+const greeting = await think<string>({
+  prompt: "Say hello to the world in a creative way",
+  jsonSchema: { type: "string" },
+});
+console.log(greeting);
+```
+
+For Zod schemas, agents, big data processing, and more — see the [Library documentation](https://thinklang.dev/library/quick-start).
+
+---
 
 ## IDE Support
 
-### VS Code Extension
-
-The `thinklang-vscode/` directory contains a VS Code extension with:
-
-- Syntax highlighting for all ThinkLang keywords and constructs
-- 11 code snippets (`think`, `infer`, `reason`, `type`, `fn`, `match`, `trycatch`, `guard`, `test`, etc.)
-- LSP integration for diagnostics, hover, completion, go-to-definition, document symbols, and signature help
-
-### LSP Server
-
-The language server runs over stdio and provides:
-
-- **Diagnostics** — Parse errors and type checker warnings
-- **Hover** — Type information for variables, types, and fields
-- **Completion** — Keywords, types, variables, member completions
-- **Go to Definition** — Jump to type, function, and variable declarations
-- **Document Symbols** — Outline of types, functions, and variables
-- **Signature Help** — Parameter hints for `think<T>()`, `infer<T>()`, and user-defined functions
-
-## Examples
-
-17 example programs in `examples/`:
-
-| File | Feature |
-|------|---------|
-| `01-hello-think.tl` | Basic `think` call |
-| `02-classification.tl` | Structured types with context |
-| `03-extraction.tl` | Data extraction |
-| `04-summarization.tl` | Text summarization |
-| `05-sentiment.tl` | Sentiment analysis with `Confident<T>` |
-| `06-infer-basic.tl` | Type inference with `infer` |
-| `07-with-context.tl` | Context management |
-| `08-confident-values.tl` | Confidence tracking and unwrapping |
-| `09-pipeline.tl` | Pipeline operator `\|>` |
-| `10-multi-step.tl` | Multi-step processing |
-| `11-uncertain.tl` | Uncertain values and handling |
-| `12-reason-block.tl` | Reason blocks with goals and steps |
-| `13-guards.tl` | Output guards with retry |
-| `14-match-expression.tl` | Pattern matching |
-| `15-try-catch.tl` | Error handling |
-| `16-without-context.tl` | Context exclusion |
-| `17-cache-demo.tl` | Response caching |
+The `thinklang-vscode/` directory contains a VS Code extension with syntax highlighting, 11 code snippets, and full LSP integration (diagnostics, hover, completion, go-to-definition, document symbols, signature help).
 
 ## Documentation
 
-Full documentation is available at **[thinklang.dev](https://thinklang.dev)**.
+Full documentation at **[thinklang.dev](https://thinklang.dev)**.
 
-The `docs/` directory contains a VitePress documentation site:
-
-```bash
-cd docs
-npm install
-npm run dev      # dev server
-npm run build    # static build
-```
-
-## Project Structure
-
-```
-src/
-├── ast/          # AST node type definitions
-├── checker/      # Type checker (scope, types, diagnostics)
-├── cli/          # CLI (run, compile, repl, test, cost-report)
-├── compiler/     # Code generator: AST → TypeScript; module resolver
-├── grammar/      # PEG grammar (thinklang.peggy)
-├── lsp/          # Language Server Protocol implementation
-├── parser/       # Wraps the generated Peggy parser
-├── repl/         # Interactive REPL
-├── runtime/      # Anthropic SDK, think/infer/reason, caching, cost tracking
-└── testing/      # Test runner, assertions, snapshots, replay
-thinklang-vscode/ # VS Code extension
-docs/             # VitePress documentation site
-tests/            # Vitest test suite
-examples/         # 17 example programs
-```
-
-## Development
-
-For contributors working on ThinkLang itself:
-
-```bash
-git clone https://github.com/eliashourany/ThinkLang.git
-cd thinklang
-npm install             # also runs build via prepare script
-
-npm run build           # full build (parser + TypeScript)
-npm run build:parser    # regenerate PEG parser only
-npm run build:ts        # TypeScript compilation only
-npm test                # run test suite
-npm run test:watch      # tests in watch mode
-```
+- [Language Guide](https://thinklang.dev/guide/getting-started) — Getting started with `.tl` files and the CLI
+- [Library Guide](https://thinklang.dev/library/quick-start) — Using ThinkLang from JavaScript/TypeScript
+- [API Reference](https://thinklang.dev/reference/runtime-api) — Complete runtime API
+- [Examples](https://thinklang.dev/examples/) — 22 ThinkLang programs + 10 JS/TS examples
 
 ## License
 
