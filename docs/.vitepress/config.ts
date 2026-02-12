@@ -39,6 +39,7 @@ export default defineConfig({
         {
           text: "Developer Tools",
           items: [
+            { text: "Library Usage", link: "/guide/library-usage" },
             { text: "Testing", link: "/guide/testing" },
             { text: "Cost Tracking", link: "/guide/cost-tracking" },
           ],
