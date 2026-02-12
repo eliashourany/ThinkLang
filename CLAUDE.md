@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-ThinkLang is an AI-native programming language where `think` is a keyword — it transpiles to TypeScript that calls an LLM runtime. The runtime is also usable as a standalone JS/TS library (`import { think } from "thinklang"`).
+ThinkLang is an AI-native programming language where `think` is a keyword — it transpiles to TypeScript that calls an LLM runtime. The runtime is also usable as a standalone JS/TS library (`import { think } from "thinklang"`). It is model-agnostic, supporting Anthropic, OpenAI, Google Gemini, Ollama, and custom providers.
 
 ## Build
 
@@ -21,7 +21,7 @@ npm test          # vitest run (single pass)
 npm run test:watch  # vitest in watch mode
 ```
 
-Tests live in `tests/` and use Vitest with globals enabled. Test timeout is 30s. There are 16 test files covering the grammar, parser, checker, compiler, runtime, integration, caching, guards, match, reason blocks, cost tracking, LSP, imports, the testing framework, init, zod-schema, and auto-init.
+Tests live in `tests/` and use Vitest with globals enabled. Test timeout is 30s. There are 17 test files covering the grammar, parser, checker, compiler, runtime, integration, caching, guards, match, reason blocks, cost tracking, LSP, imports, the testing framework, init, zod-schema, auto-init, and agentic features.
 
 ## Project Structure
 
@@ -36,7 +36,19 @@ src/
 ├── lsp/          # Language Server Protocol (diagnostics, hover, completion, go-to-def, symbols, signature help)
 ├── parser/       # Wraps the generated Peggy parser
 ├── repl/         # Interactive REPL
-├── runtime/      # AI integration: Anthropic SDK, think/infer/reason/guard, caching, cost tracking, init, zodSchema
+├── runtime/      # AI integration: multi-provider system, think/infer/reason/agent, tools, caching, cost tracking
+│   ├── provider.ts           # ModelProvider interface, CompleteOptions/Result with tool calling types
+│   ├── provider-registry.ts  # Provider registry: registerProvider/createProvider
+│   ├── anthropic-provider.ts # Anthropic SDK provider (tool calling + multi-turn)
+│   ├── providers/            # Additional providers
+│   │   ├── openai-provider.ts  # OpenAI (optional peer dep)
+│   │   ├── gemini-provider.ts  # Google Gemini (optional peer dep)
+│   │   └── ollama-provider.ts  # Ollama (no extra deps)
+│   ├── agent.ts              # Agentic loop: multi-turn tool calling
+│   ├── tools.ts              # defineTool() + toolToDefinition()
+│   ├── builtin-tools.ts      # Built-in tools: fetchUrl, readFile, writeFile, runCommand
+│   ├── init.ts               # Multi-provider init()
+│   └── ...                   # think, infer, reason, guard, cache, cost-tracker, etc.
 └── testing/      # Built-in test framework: runner, assertions, snapshots, replay provider
 thinklang-vscode/ # VS Code extension (TextMate grammar, snippets, LSP client)
 docs/             # VitePress documentation site
@@ -51,6 +63,8 @@ Compilation pipeline: **parse → resolve imports → type check → code genera
 3. Checker validates types with scope tracking (imported functions are registered in scope)
 4. Code generator emits TypeScript that imports from the runtime (imported types/functions are emitted before local declarations)
 
+The language supports `tool` declarations (compiled to `defineTool()` calls) and `agent<T>(prompt) with tools: ...` expressions (compiled to `agent()` calls with multi-turn tool-calling loops).
+
 The LSP server (`src/lsp/`) runs a parallel pipeline per document: parse → collect type decls → check → build scope tree → build symbol index. It provides diagnostics, hover, completion, go-to-definition, document symbols, and signature help.
 
 The testing framework (`src/testing/`) discovers `*.test.tl` files, compiles test blocks, and executes them. It supports value assertions (`assert expr`), semantic assertions (`assert.semantic(value, criteria)`), and deterministic replay via snapshot fixtures.
@@ -59,9 +73,14 @@ The testing framework (`src/testing/`) discovers `*.test.tl` files, compiles tes
 
 Copy `.env.example` to `.env` and set:
 
-- `ANTHROPIC_API_KEY` (required for AI features)
+- `ANTHROPIC_API_KEY` (required for Anthropic provider)
+- `OPENAI_API_KEY` (required for OpenAI provider)
+- `GEMINI_API_KEY` (required for Gemini provider)
+- `OLLAMA_BASE_URL` (for Ollama, defaults to `http://localhost:11434`)
 - `THINKLANG_MODEL` (optional, defaults to `claude-opus-4-6`)
 - `THINKLANG_CACHE` (optional, defaults to `true`)
+
+At least one provider API key must be set. The runtime auto-detects the provider from available env vars.
 
 ## CLI
 
@@ -83,25 +102,44 @@ ThinkLang files use the `.tl` extension. Examples are in `examples/`.
 ThinkLang can be used as a library in any JS/TS project:
 
 ```typescript
-import { init, think, infer, reason, zodSchema } from "thinklang";
+import { init, think, infer, reason, agent, defineTool, zodSchema } from "thinklang";
 ```
 
 Package entry points (configured via `exports` in package.json):
-- `thinklang` — main entry: init, think, infer, reason, zodSchema, errors, cost tracking, provider system
+- `thinklang` — main entry: init, think, infer, reason, agent, defineTool, zodSchema, errors, providers, cost tracking
 - `thinklang/runtime` — runtime only
 - `thinklang/compiler` — compile/compileToAst
 - `thinklang/parser` — parse/parseSync
 
 Key library features:
-- **`init(options?)`** (`src/runtime/init.ts`): Convenience initializer. Reads `ANTHROPIC_API_KEY` from env or accepts `{ apiKey, model }`.
+- **`init(options?)`** (`src/runtime/init.ts`): Multi-provider initializer. Accepts `{ provider, apiKey, model, baseUrl }`. Auto-detects provider from API key format or env vars.
+- **`agent(options)`** (`src/runtime/agent.ts`): Agentic loop — the LLM calls tools until it produces a final answer. Options: `prompt`, `tools`, `context`, `maxTurns`, `guards`, `retryCount`, `onToolCall`, `onToolResult`, `abortSignal`.
+- **`defineTool(config)`** (`src/runtime/tools.ts`): Define tools for agent use. Accepts Zod schemas or raw JSON Schema for input.
 - **`zodSchema(zodType)`** (`src/runtime/zod-schema.ts`): Converts a Zod schema to JSON Schema for use with think/infer/reason. Spreads into options: `think({ prompt: "...", ...zodSchema(MyType) })`.
-- **Auto-init**: `getProvider()` auto-initializes from `ANTHROPIC_API_KEY` env var on first use — no explicit init needed.
-- **Generic returns**: `think<T>()`, `infer<T>()`, `reason<T>()` return `Promise<T>` for type-safe results.
+- **`registerProvider(name, factory)`** (`src/runtime/provider-registry.ts`): Register custom LLM providers.
+- **`registerPricing(model, pricing)`** (`src/runtime/cost-tracker.ts`): Register custom model pricing for cost tracking.
+- **Auto-init**: `getProvider()` auto-initializes from env vars on first use — no explicit init needed.
+- **Generic returns**: `think<T>()`, `infer<T>()`, `reason<T>()`, `agent<T>()` return `Promise<T>` for type-safe results.
+
+## Provider System
+
+The runtime is model-agnostic. Built-in providers:
+
+| Provider | Package | Env Var | Default Model |
+|----------|---------|---------|---------------|
+| `anthropic` | `@anthropic-ai/sdk` (bundled) | `ANTHROPIC_API_KEY` | `claude-opus-4-6` |
+| `openai` | `openai` (optional peer dep) | `OPENAI_API_KEY` | `gpt-4o` |
+| `gemini` | `@google/generative-ai` (optional peer dep) | `GEMINI_API_KEY` | `gemini-2.0-flash` |
+| `ollama` | *(none — uses fetch)* | `OLLAMA_BASE_URL` | `llama3` |
+
+Custom providers: implement the `ModelProvider` interface or register a factory with `registerProvider()`.
 
 ## Key Interfaces
 
-- **`ModelProvider`** (`src/runtime/provider.ts`): `complete(options: CompleteOptions): Promise<CompleteResult>`. `CompleteResult` returns `{ data, usage: { inputTokens, outputTokens }, model }`.
-- **`CostTracker`** (`src/runtime/cost-tracker.ts`): `record()`, `getSummary()`, `getRecords()`, `reset()`. `globalCostTracker` singleton is called automatically by think/infer/reason.
+- **`ModelProvider`** (`src/runtime/provider.ts`): `complete(options: CompleteOptions): Promise<CompleteResult>`. `CompleteOptions` includes `tools`, `toolChoice`, `messages` for multi-turn tool calling. `CompleteResult` returns `{ data, usage, model, toolCalls?, stopReason? }`.
+- **`AgentOptions`** / **`AgentResult`** (`src/runtime/agent.ts`): `agent<T>(options)` runs a multi-turn loop. Options include `prompt`, `tools`, `context`, `maxTurns`, `guards`, `onToolCall`, `onToolResult`, `abortSignal`. Result includes `data`, `turns`, `totalUsage`, `toolCallHistory`.
+- **`Tool`** / **`defineTool()`** (`src/runtime/tools.ts`): `defineTool({ name, description, input, execute })` creates a tool. `input` accepts Zod schemas or JSON Schema objects.
+- **`CostTracker`** (`src/runtime/cost-tracker.ts`): `record()`, `getSummary()`, `getRecords()`, `reset()`. `globalCostTracker` singleton is called automatically. Supports `registerPricing()` for custom models. Tracks `"think"`, `"infer"`, `"reason"`, `"agent"`, and `"semantic_assert"` operations.
 - **`DocumentManager`** (`src/lsp/document-manager.ts`): `analyze(uri, text): DocumentState`. Returns AST, diagnostics, type declarations, symbol index, and enriched scope.
 - **`ReplayProvider`** (`src/testing/replay-provider.ts`): Implements `ModelProvider`, replays responses from snapshot files for deterministic tests.
 - **`resolveImports`** (`src/compiler/module-resolver.ts`): `resolveImports(imports, filePath, resolving?)` → `{ importedTypes, importedFunctions, errors }`. Resolves relative paths, detects circular imports, parses imported files to extract type and function declarations.
@@ -118,3 +156,4 @@ The `files` field in package.json controls what's included in the tarball.
 - All imports use `.js` extensions (Node16 module resolution)
 - Tests in `tests/` using Vitest globals (`describe`, `it`, `expect` — no imports needed)
 - AST nodes use 1-based line/column (`Location`); LSP uses 0-based (`Position`). Conversion utilities in `src/lsp/utils.ts`
+- Optional peer dependencies (`openai`, `@google/generative-ai`) are loaded lazily — provider files can be imported without installing the SDK

@@ -40,6 +40,34 @@
     ],
     "description": "AI reason block"
   },
+  "Tool Declaration": {
+    "prefix": "tool",
+    "body": [
+      "tool ${1:name}(${2:param}: ${3:string}): ${4:string} @description(\"${5:Tool description}\") {",
+      "  ${0}",
+      "}"
+    ],
+    "description": "Tool declaration for agent use"
+  },
+  "Agent Expression": {
+    "prefix": "agent",
+    "body": [
+      "agent<${1:Type}>(\"${2:prompt}\")",
+      "  with tools: ${3:tool1}",
+      "  max turns: ${4:5}"
+    ],
+    "description": "AI agent expression with tools"
+  },
+  "Agent with Context": {
+    "prefix": "agentctx",
+    "body": [
+      "agent<${1:Type}>(\"${2:prompt}\")",
+      "  with tools: ${3:tool1}",
+      "  with context: ${4:variable}",
+      "  max turns: ${5:5}"
+    ],
+    "description": "AI agent expression with tools and context"
+  },
   "Type Declaration": {
     "prefix": "type",
     "body": [

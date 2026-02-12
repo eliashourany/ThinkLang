@@ -149,6 +149,34 @@ test "sentiment is positive" {
 
 [Full guide: Testing](./testing.md)
 
+## Tools
+
+Define tools that AI agents can use:
+
+```thinklang
+tool searchDocs(query: string): string @description("Search docs") {
+  let result = think<string>("Search for relevant info")
+    with context: query
+  print result
+}
+```
+
+[Full guide: Agents & Tools](./agents.md)
+
+## Agents
+
+Run agentic workflows with multi-turn tool calling:
+
+```thinklang
+let answer = agent<string>("Find the answer to this question")
+  with tools: searchDocs
+  max turns: 5
+```
+
+The agent loops: sends the prompt to the LLM, the LLM calls tools, results are fed back, until a final answer is produced.
+
+[Full guide: Agents & Tools](./agents.md)
+
 ## Modules
 
 Split code across files with `import`. All top-level types and functions are importable:
@@ -163,6 +191,18 @@ print result
 No `export` keyword needed. Paths are relative to the importing file. Circular imports are detected.
 
 [Full guide: Syntax Reference -- Imports](../reference/syntax.md#imports)
+
+## Multiple Providers
+
+ThinkLang is model-agnostic. Set any supported provider's API key:
+
+```bash
+export ANTHROPIC_API_KEY=...   # or OPENAI_API_KEY, GEMINI_API_KEY
+```
+
+Or use Ollama for local models with no API key needed.
+
+[Full guide: Provider System](./providers.md)
 
 ## Cost Tracking
 

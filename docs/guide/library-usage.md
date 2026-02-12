@@ -1,6 +1,6 @@
 # Using ThinkLang as a Library
 
-ThinkLang's runtime can be used directly in any JavaScript or TypeScript project. You get the same AI primitives (`think`, `infer`, `reason`) without writing `.tl` files.
+ThinkLang's runtime can be used directly in any JavaScript or TypeScript project. You get the same AI primitives (`think`, `infer`, `reason`), agentic tool-calling (`agent`, `defineTool`), and multi-provider support without writing `.tl` files.
 
 ## Installation
 
@@ -10,7 +10,7 @@ npm install thinklang
 
 ## Quick Start
 
-If `ANTHROPIC_API_KEY` is in your environment, it works with zero configuration:
+If any supported API key is in your environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY`), it works with zero configuration:
 
 ```typescript
 import { think } from "thinklang";
@@ -49,23 +49,28 @@ console.log(result.score);  // 0.95
 
 ## Explicit Initialization
 
-Use `init()` when you need to configure the API key or model explicitly:
+Use `init()` when you need to configure the provider, API key, or model explicitly:
 
 ```typescript
 import { init, think } from "thinklang";
 
-init({
-  apiKey: "sk-ant-...",
-  model: "claude-sonnet-4-20250514",
-});
+// Use Anthropic (default)
+init({ apiKey: "sk-ant-...", model: "claude-sonnet-4-20250514" });
 
-const result = await think<string>({
-  prompt: "Say hello briefly",
-  jsonSchema: { type: "string" },
-});
+// Use OpenAI (requires: npm install openai)
+init({ provider: "openai", apiKey: "sk-..." });
+
+// Use Gemini (requires: npm install @google/generative-ai)
+init({ provider: "gemini", apiKey: "AI..." });
+
+// Use Ollama (local, no API key needed)
+init({ provider: "ollama" });
+
+// Use a custom ModelProvider instance
+init({ provider: myCustomProvider });
 ```
 
-If you don't call `init()`, the runtime auto-initializes from the `ANTHROPIC_API_KEY` environment variable on first use.
+If you don't call `init()`, the runtime auto-initializes from environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`) on first use.
 
 ## Core Functions
 
@@ -133,16 +138,132 @@ const analysis = await reason<{ recommendation: string; risk: string }>({
 });
 ```
 
+## Agents and Tools
+
+ThinkLang's agentic runtime is fully available from the library API. Define tools that the LLM can call, then run an agent loop that orchestrates tool use automatically.
+
+### Defining Tools
+
+Use `defineTool()` to create tools. It accepts Zod schemas or raw JSON Schema for the input:
+
+```typescript
+import { defineTool } from "thinklang";
+import { z } from "zod";
+
+const searchDocs = defineTool({
+  name: "searchDocs",
+  description: "Search internal documentation for relevant info",
+  input: z.object({ query: z.string() }),
+  execute: async ({ query }) => {
+    const results = await docsIndex.search(query);
+    return results.map(r => r.title).join("\n");
+  },
+});
+```
+
+### Running an Agent
+
+Use `agent()` to start an agentic loop. The LLM calls tools as needed until it produces a final answer:
+
+```typescript
+import { agent, defineTool, zodSchema } from "thinklang";
+import { z } from "zod";
+
+const getWeather = defineTool({
+  name: "getWeather",
+  description: "Get weather for a city",
+  input: z.object({ city: z.string() }),
+  execute: async ({ city }) => {
+    const res = await fetch(`https://api.weather.example/v1/${city}`);
+    return res.text();
+  },
+});
+
+const Report = z.object({
+  city: z.string(),
+  temperature: z.number(),
+  conditions: z.string(),
+  recommendation: z.string(),
+});
+
+const result = await agent<z.infer<typeof Report>>({
+  prompt: "What is the weather in Tokyo? Recommend what to wear.",
+  tools: [getWeather],
+  ...zodSchema(Report),
+  maxTurns: 5,
+});
+
+console.log(result.data);             // the Report object
+console.log(result.turns);            // how many loop iterations
+console.log(result.toolCallHistory);  // full history of tool calls
+```
+
+### Agent Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `prompt` | `string` | required | The goal for the agent |
+| `tools` | `Tool[]` | required | Tools the agent can call |
+| `jsonSchema` | `object` | — | JSON Schema for the final output |
+| `maxTurns` | `number` | `10` | Maximum loop iterations |
+| `guards` | `GuardRule[]` | — | Validate the final output |
+| `retryCount` | `number` | — | Retry the entire loop on failure |
+| `fallback` | `() => T` | — | Fallback if all retries fail |
+| `onToolCall` | `(call) => void` | — | Called before each tool executes |
+| `onToolResult` | `(result) => void` | — | Called after each tool executes |
+| `abortSignal` | `AbortSignal` | — | Cancel the agent loop |
+| `context` | `object` | — | Context data for the agent |
+| `model` | `string` | — | Override the default model |
+
+### Built-in Tools
+
+ThinkLang ships with opt-in built-in tools that you can pass to any agent:
+
+```typescript
+import { agent, fetchUrl, readFile, writeFile, runCommand } from "thinklang";
+
+const result = await agent({
+  prompt: "Read the README and summarize it",
+  tools: [readFile],
+  jsonSchema: { type: "string" },
+  maxTurns: 3,
+});
+```
+
+| Tool | Description |
+|------|-------------|
+| `fetchUrl` | Fetch a URL via HTTP GET |
+| `readFile` | Read a local file |
+| `writeFile` | Write content to a local file |
+| `runCommand` | Run a shell command |
+
+### Observability Hooks
+
+Track what the agent is doing in real time:
+
+```typescript
+const result = await agent({
+  prompt: "Research this topic",
+  tools: [searchDocs],
+  jsonSchema: { type: "string" },
+  onToolCall: (call) => {
+    console.log(`Calling tool: ${call.name}`, call.input);
+  },
+  onToolResult: (result) => {
+    console.log(`Tool ${result.toolName}:`, result.isError ? "ERROR" : "OK");
+  },
+});
+```
+
 ## Custom Providers
 
-Implement the `ModelProvider` interface to use a different LLM backend:
+Implement the `ModelProvider` interface to use any LLM backend:
 
 ```typescript
 import { setProvider, think, type ModelProvider, type CompleteOptions, type CompleteResult } from "thinklang";
 
 class MyProvider implements ModelProvider {
   async complete(options: CompleteOptions): Promise<CompleteResult> {
-    // Call your LLM here
     const data = await myLLM.generate(options.userMessage, options.jsonSchema);
     return {
       data,
@@ -155,6 +276,22 @@ class MyProvider implements ModelProvider {
 setProvider(new MyProvider());
 const result = await think<string>({ prompt: "...", jsonSchema: { type: "string" } });
 ```
+
+### Register a Custom Provider
+
+You can also register providers by name so they work with `init()`:
+
+```typescript
+import { registerProvider, init } from "thinklang";
+
+registerProvider("my-llm", (options) => {
+  return new MyProvider(options.apiKey, options.model);
+});
+
+init({ provider: "my-llm", apiKey: "my-key" });
+```
+
+See the [Provider System](./providers.md) guide for full details.
 
 ## Cost Tracking
 
@@ -175,7 +312,7 @@ console.log(`Tokens: ${summary.totalInputTokens} in / ${summary.totalOutputToken
 All runtime errors extend `ThinkError`:
 
 ```typescript
-import { think, ThinkError, SchemaViolation, GuardFailed } from "thinklang";
+import { think, agent, ThinkError, SchemaViolation, GuardFailed, AgentMaxTurnsError, ToolExecutionError } from "thinklang";
 
 try {
   await think<string>({ prompt: "...", jsonSchema: { type: "string" } });
@@ -184,6 +321,10 @@ try {
     console.error("LLM output didn't match schema:", error.expected);
   } else if (error instanceof GuardFailed) {
     console.error("Guard failed:", error.guardName, error.constraint);
+  } else if (error instanceof AgentMaxTurnsError) {
+    console.error("Agent hit turn limit:", error.maxTurns);
+  } else if (error instanceof ToolExecutionError) {
+    console.error("Tool failed:", error.toolName, error.cause);
   } else if (error instanceof ThinkError) {
     console.error("ThinkLang error:", error.message);
   }
@@ -196,7 +337,7 @@ ThinkLang exposes several entry points:
 
 | Import path | Contents |
 |-------------|----------|
-| `thinklang` | Everything: init, think, infer, reason, zodSchema, errors, providers, cost tracking |
+| `thinklang` | Everything: init, think, infer, reason, agent, defineTool, zodSchema, errors, providers, cost tracking |
 | `thinklang/runtime` | Runtime only (same as above, without compiler) |
 | `thinklang/compiler` | `compile()` and `compileToAst()` for `.tl` source code |
 | `thinklang/parser` | `parse()` and `parseSync()` for `.tl` source code |
@@ -205,7 +346,10 @@ ThinkLang exposes several entry points:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | — | API key (auto-detected by runtime) |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key (auto-detected) |
+| `OPENAI_API_KEY` | — | OpenAI API key (auto-detected) |
+| `GEMINI_API_KEY` | — | Google Gemini API key (auto-detected) |
+| `OLLAMA_BASE_URL` | — | Ollama server URL (auto-detected) |
 | `THINKLANG_MODEL` | `claude-opus-4-6` | Default model |
 | `THINKLANG_CACHE` | `true` | Enable response caching |
 
@@ -213,5 +357,7 @@ ThinkLang exposes several entry points:
 
 - See `examples/js/` for runnable TypeScript examples
 - Read the [Runtime API Reference](../reference/runtime-api.md) for full details
+- Learn about [Agents & Tools](./agents.md) for agentic workflows
+- Learn about the [Provider System](./providers.md) for multi-provider setup
 - Learn about [Guards](./guards.md) for output validation
 - Learn about [Error Handling](./error-handling.md) for all error types
