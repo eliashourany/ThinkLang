@@ -162,3 +162,39 @@ The `steps` guide the LLM through a chain-of-thought process before producing th
 | `reason` | Complex analysis with explicit steps | Goal + numbered steps + optional context | Typed result |
 
 All three primitives support `with context`, `without context`, `guard`, and `on_fail` clauses.
+
+## Using from JS/TS
+
+The same three primitives are available as library functions. See the [Library Core Functions](/library/core-functions) guide for full details.
+
+```typescript
+import { think, infer, reason, zodSchema } from "thinklang";
+import { z } from "zod";
+
+const Summary = z.object({ headline: z.string(), keyPoints: z.array(z.string()) });
+
+// think
+const summary = await think<z.infer<typeof Summary>>({
+  prompt: "Summarize this article",
+  ...zodSchema(Summary),
+  context: { article },
+});
+
+// infer
+const lang = await infer<string>({
+  value: "Bonjour le monde",
+  hint: "Detect the language",
+  jsonSchema: { type: "string" },
+});
+
+// reason
+const analysis = await reason({
+  goal: "Analyze this investment portfolio",
+  steps: [
+    { number: 1, description: "Evaluate current allocation" },
+    { number: 2, description: "Identify risks" },
+  ],
+  ...zodSchema(z.object({ recommendation: z.string(), risk: z.string() })),
+  context: { portfolio },
+});
+```

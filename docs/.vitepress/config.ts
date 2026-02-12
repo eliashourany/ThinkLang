@@ -11,6 +11,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: "Guide", link: "/guide/getting-started" },
+      { text: "Library", link: "/library/quick-start" },
       { text: "Reference", link: "/reference/syntax" },
       { text: "Examples", link: "/examples/" },
     ],
@@ -34,16 +35,28 @@ export default defineConfig({
             { text: "Match", link: "/guide/match" },
             { text: "Pipeline", link: "/guide/pipeline" },
             { text: "Agents & Tools", link: "/guide/agents" },
+            { text: "Big Data", link: "/guide/big-data" },
             { text: "Error Handling", link: "/guide/error-handling" },
           ],
         },
         {
-          text: "Infrastructure",
+          text: "Tooling",
           items: [
-            { text: "Provider System", link: "/guide/providers" },
-            { text: "Library Usage", link: "/guide/library-usage" },
             { text: "Testing", link: "/guide/testing" },
             { text: "Cost Tracking", link: "/guide/cost-tracking" },
+          ],
+        },
+      ],
+      "/library/": [
+        {
+          text: "Library (JS/TS)",
+          items: [
+            { text: "Quick Start", link: "/library/quick-start" },
+            { text: "Core Functions", link: "/library/core-functions" },
+            { text: "Agents & Tools", link: "/library/agents-tools" },
+            { text: "Big Data & Streaming", link: "/library/big-data" },
+            { text: "Providers", link: "/library/providers" },
+            { text: "Error Handling", link: "/library/error-handling" },
           ],
         },
       ],

@@ -1,6 +1,10 @@
 # Getting Started
 
-This guide walks you through installing ThinkLang and running your first AI-powered program.
+This guide walks you through installing ThinkLang and running your first AI-powered program using the CLI and `.tl` files.
+
+::: tip Looking for the JS/TS library?
+If you want to use ThinkLang's AI primitives directly from JavaScript or TypeScript without writing `.tl` files, see the [Library Quick Start](/library/quick-start).
+:::
 
 ## Prerequisites
 
@@ -56,7 +60,7 @@ THINKLANG_CACHE=true
 | `THINKLANG_MODEL` | No | `claude-opus-4-6` | Model to use for AI calls |
 | `THINKLANG_CACHE` | No | `true` | Cache identical AI requests |
 
-ThinkLang auto-detects which provider to use from the environment variable that is set. See the [Provider System](./providers.md) guide for details.
+ThinkLang auto-detects which provider to use from the environment variable that is set. See the [Provider System](/library/providers) guide for details.
 
 ## Your First Program
 
@@ -140,32 +144,11 @@ print result
 
 All top-level `type` and `fn` declarations are automatically importable -- no `export` keyword is needed.
 
-## Using ThinkLang as a JS/TS Library
-
-You can also use ThinkLang's AI primitives directly from JavaScript or TypeScript without writing `.tl` files:
-
-```typescript
-import { think, zodSchema } from "thinklang";
-import { z } from "zod";
-
-const Sentiment = z.object({
-  label: z.enum(["positive", "negative", "neutral"]),
-  score: z.number(),
-});
-
-const result = await think<z.infer<typeof Sentiment>>({
-  prompt: "Analyze the sentiment of this review",
-  ...zodSchema(Sentiment),
-});
-```
-
-See the full [Library Usage Guide](./library-usage.md) for details.
-
 ## Next Steps
 
 - Take the [Language Tour](./language-tour.md) for a quick overview of all features
 - Learn about the [Type System](./types.md)
 - Explore [AI Primitives](./ai-primitives.md): `think`, `infer`, and `reason`
 - Build agentic workflows with [Agents & Tools](./agents.md)
-- Configure your AI backend with the [Provider System](./providers.md)
-- Use ThinkLang as a [JS/TS Library](./library-usage.md)
+- Process collections with [Big Data](./big-data.md)
+- Use ThinkLang as a [JS/TS Library](/library/quick-start)

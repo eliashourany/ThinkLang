@@ -95,3 +95,23 @@ try {
   print "Falling back to manual review"
 }
 ```
+
+## Using from JS/TS
+
+The same error types are available as importable classes. Use standard `try`/`catch` with `instanceof` checks. See the [Library Error Handling](/library/error-handling) guide for full details.
+
+```typescript
+import { think, ThinkError, SchemaViolation, GuardFailed, AgentMaxTurnsError } from "thinklang";
+
+try {
+  const result = await think<string>({ prompt: "...", jsonSchema: { type: "string" } });
+} catch (error) {
+  if (error instanceof SchemaViolation) {
+    console.error("Schema error:", error.expected);
+  } else if (error instanceof GuardFailed) {
+    console.error("Guard failed:", error.guardName);
+  } else if (error instanceof ThinkError) {
+    console.error("ThinkLang error:", error.message);
+  }
+}
+```
