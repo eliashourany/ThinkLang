@@ -125,8 +125,30 @@ print result
 
 All top-level `type` and `fn` declarations are automatically importable -- no `export` keyword is needed.
 
+## Using ThinkLang as a JS/TS Library
+
+You can also use ThinkLang's AI primitives directly from JavaScript or TypeScript without writing `.tl` files:
+
+```typescript
+import { think, zodSchema } from "thinklang";
+import { z } from "zod";
+
+const Sentiment = z.object({
+  label: z.enum(["positive", "negative", "neutral"]),
+  score: z.number(),
+});
+
+const result = await think<z.infer<typeof Sentiment>>({
+  prompt: "Analyze the sentiment of this review",
+  ...zodSchema(Sentiment),
+});
+```
+
+See the full [Library Usage Guide](./library-usage.md) for details.
+
 ## Next Steps
 
 - Take the [Language Tour](./language-tour.md) for a quick overview of all features
 - Learn about the [Type System](./types.md)
 - Explore [AI Primitives](./ai-primitives.md): `think`, `infer`, and `reason`
+- Use ThinkLang as a [JS/TS Library](./library-usage.md)

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-ThinkLang is an AI-native programming language where `think` is a keyword — it transpiles to TypeScript that calls an LLM runtime.
+ThinkLang is an AI-native programming language where `think` is a keyword — it transpiles to TypeScript that calls an LLM runtime. The runtime is also usable as a standalone JS/TS library (`import { think } from "thinklang"`).
 
 ## Build
 
@@ -21,12 +21,13 @@ npm test          # vitest run (single pass)
 npm run test:watch  # vitest in watch mode
 ```
 
-Tests live in `tests/` and use Vitest with globals enabled. Test timeout is 30s. There are 13 test files covering the grammar, parser, checker, compiler, runtime, integration, caching, guards, match, reason blocks, cost tracking, LSP, imports, and the testing framework.
+Tests live in `tests/` and use Vitest with globals enabled. Test timeout is 30s. There are 16 test files covering the grammar, parser, checker, compiler, runtime, integration, caching, guards, match, reason blocks, cost tracking, LSP, imports, the testing framework, init, zod-schema, and auto-init.
 
 ## Project Structure
 
 ```
 src/
+├── index.ts      # Root barrel export (library entry point: import { think } from "thinklang")
 ├── ast/          # AST node type definitions
 ├── checker/      # Type checker (scope, types, diagnostics)
 ├── cli/          # Commander.js CLI (run, compile, repl, test, cost-report commands)
@@ -35,7 +36,7 @@ src/
 ├── lsp/          # Language Server Protocol (diagnostics, hover, completion, go-to-def, symbols, signature help)
 ├── parser/       # Wraps the generated Peggy parser
 ├── repl/         # Interactive REPL
-├── runtime/      # AI integration: Anthropic SDK, think/infer/reason/guard, caching, cost tracking
+├── runtime/      # AI integration: Anthropic SDK, think/infer/reason/guard, caching, cost tracking, init, zodSchema
 └── testing/      # Built-in test framework: runner, assertions, snapshots, replay provider
 thinklang-vscode/ # VS Code extension (TextMate grammar, snippets, LSP client)
 docs/             # VitePress documentation site
@@ -76,6 +77,26 @@ npx tsx src/cli/index.ts cost-report                # show cost summary
 ```
 
 ThinkLang files use the `.tl` extension. Examples are in `examples/`.
+
+## Library API (JS/TS)
+
+ThinkLang can be used as a library in any JS/TS project:
+
+```typescript
+import { init, think, infer, reason, zodSchema } from "thinklang";
+```
+
+Package entry points (configured via `exports` in package.json):
+- `thinklang` — main entry: init, think, infer, reason, zodSchema, errors, cost tracking, provider system
+- `thinklang/runtime` — runtime only
+- `thinklang/compiler` — compile/compileToAst
+- `thinklang/parser` — parse/parseSync
+
+Key library features:
+- **`init(options?)`** (`src/runtime/init.ts`): Convenience initializer. Reads `ANTHROPIC_API_KEY` from env or accepts `{ apiKey, model }`.
+- **`zodSchema(zodType)`** (`src/runtime/zod-schema.ts`): Converts a Zod schema to JSON Schema for use with think/infer/reason. Spreads into options: `think({ prompt: "...", ...zodSchema(MyType) })`.
+- **Auto-init**: `getProvider()` auto-initializes from `ANTHROPIC_API_KEY` env var on first use — no explicit init needed.
+- **Generic returns**: `think<T>()`, `infer<T>()`, `reason<T>()` return `Promise<T>` for type-safe results.
 
 ## Key Interfaces
 
