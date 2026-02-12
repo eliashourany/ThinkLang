@@ -41,6 +41,7 @@ export default defineConfig({
           text: "Infrastructure",
           items: [
             { text: "Provider System", link: "/guide/providers" },
+            { text: "Library Usage", link: "/guide/library-usage" },
             { text: "Testing", link: "/guide/testing" },
             { text: "Cost Tracking", link: "/guide/cost-tracking" },
           ],
