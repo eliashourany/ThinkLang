@@ -1,5 +1,6 @@
 import type { ToolDefinition } from "./provider.js";
 import type { ZodType } from "zod";
+import { zodSchema as zodSchemaFn } from "./zod-schema.js";
 
 export interface Tool<TInput = unknown, TOutput = unknown> {
   name: string;
@@ -35,8 +36,7 @@ export function defineTool<TInput = unknown, TOutput = unknown>(
 
   if (isZodType(config.input)) {
     // Convert Zod schema to JSON Schema
-    const { zodSchema } = require("./zod-schema.js");
-    const result = zodSchema(config.input);
+    const result = zodSchemaFn(config.input);
     inputSchema = result.jsonSchema;
   } else {
     inputSchema = config.input as Record<string, unknown>;

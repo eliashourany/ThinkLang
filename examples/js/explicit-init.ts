@@ -6,7 +6,7 @@ import { init, think } from "thinklang";
 // Explicitly configure with an API key and model
 init({
   apiKey: process.env.ANTHROPIC_API_KEY,
-  model: "claude-sonnet-4-20250514",
+  model: "claude-sonnet-4-5-20250929",
 });
 
 const result = await think<string>({

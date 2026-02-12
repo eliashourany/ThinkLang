@@ -163,6 +163,25 @@ export async function agent<T = unknown>(options: AgentOptions): Promise<AgentRe
       }
 
       // Model returned a final answer (no tool calls)
+      // If we have a jsonSchema and the response is unstructured text,
+      // make one more call without tools to get structured output
+      let finalData = result.data;
+      if (jsonSchema && typeof result.data === "string") {
+        messages.push({ role: "assistant", content: result.data });
+        messages.push({ role: "user", content: "Now provide your final answer as structured JSON matching the required schema." });
+        const formatted = await provider.complete({
+          systemPrompt,
+          userMessage: prompt,
+          messages,
+          jsonSchema,
+          schemaName,
+          model,
+        });
+        totalUsage.inputTokens += formatted.usage.inputTokens;
+        totalUsage.outputTokens += formatted.usage.outputTokens;
+        finalData = formatted.data;
+      }
+
       const durationMs = Date.now() - startTime;
       globalCostTracker.record({
         operation: "agent",
@@ -173,7 +192,7 @@ export async function agent<T = unknown>(options: AgentOptions): Promise<AgentRe
         durationMs,
       });
 
-      const data = result.data as T;
+      const data = finalData as T;
 
       // Apply guards
       if (guards && guards.length > 0) {
