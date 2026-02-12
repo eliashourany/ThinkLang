@@ -1,429 +1,185 @@
-# Plan: Agentic Capabilities + Model-Agnostic Provider System
+# Documentation Rewrite Plan
 
-## Current State
+## Analysis of Current State
 
-ThinkLang has a clean `ModelProvider` interface but is tightly coupled to Anthropic:
-- `AnthropicProvider` is the only implementation
-- `init()` always instantiates `AnthropicProvider`
-- Cost tracker hardcodes Claude model pricing
-- No tool/function calling support — only single-shot JSON Schema output
-- No multi-turn conversation or agentic loops
+### Problems with README.md
+1. **Unequal weighting** -- Library usage comes first ("Use as a Library"), CLI/language second ("Use as a Language"). For a project whose identity is "a programming language where `think` is a keyword", the language should not feel secondary. Both paths need equal prominence.
+2. **No clear two-path entry** -- A newcomer hits a wall of features before understanding the two distinct ways to use ThinkLang: as a language (`.tl` files + CLI) or as a JS/TS library (`import { think } from "thinklang"`).
+3. **Feature showcase is inconsistent** -- Some features get full code blocks, others get one-line bullets (pipeline, reason blocks, modules, context management, error handling).
+4. **Example tables are just file listings** -- Two large tables of filenames don't help a reader learn anything. They belong in docs, not the README.
+5. **Project Structure / Development sections are developer-only** -- These are for contributors, not users. They belong in CLAUDE.md.
 
-## Goals
-
-1. **Model-agnostic provider system** — support OpenAI, Google Gemini, Ollama, and custom providers
-2. **Agentic capabilities** — tool use, multi-turn loops, and an `agent` construct in the language
-
----
-
-## Phase 1: Model-Agnostic Provider System
-
-### 1.1 Extend `ModelProvider` interface (`src/runtime/provider.ts`)
-
-Add optional tool-calling support to the existing interface:
-
-```typescript
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-}
-
-export interface ToolCall {
-  id: string;
-  name: string;
-  input: Record<string, unknown>;
-}
-
-export interface ToolResult {
-  toolCallId: string;
-  output: unknown;
-  isError?: boolean;
-}
-
-export interface Message {
-  role: "user" | "assistant" | "tool_result";
-  content: string | ToolCall[];
-  toolResults?: ToolResult[];
-}
-
-export interface CompleteOptions {
-  systemPrompt: string;
-  userMessage: string;
-  jsonSchema?: Record<string, unknown>;   // now optional
-  schemaName?: string;
-  model?: string;
-  maxTokens?: number;
-  // New fields for agentic use:
-  tools?: ToolDefinition[];
-  toolChoice?: "auto" | "required" | "none" | { name: string };
-  messages?: Message[];                    // multi-turn history
-  stopSequences?: string[];
-}
-
-export interface CompleteResult {
-  data: unknown;
-  usage: UsageInfo;
-  model: string;
-  // New fields:
-  toolCalls?: ToolCall[];                  // tool invocations from model
-  stopReason?: "end_turn" | "tool_use" | "max_tokens" | "stop_sequence";
-}
-```
-
-### 1.2 Provider registry (`src/runtime/provider-registry.ts`) — NEW
-
-A registry to look up providers by name, so `init()` can accept a provider string:
-
-```typescript
-export type ProviderFactory = (options: ProviderOptions) => ModelProvider;
-
-export interface ProviderOptions {
-  apiKey?: string;
-  model?: string;
-  baseUrl?: string;
-}
-
-const registry = new Map<string, ProviderFactory>();
-
-export function registerProvider(name: string, factory: ProviderFactory): void;
-export function createProvider(name: string, options: ProviderOptions): ModelProvider;
-```
-
-Built-in registrations: `"anthropic"`, `"openai"`, `"gemini"`, `"ollama"`, `"custom"`.
-
-### 1.3 OpenAI provider (`src/runtime/providers/openai-provider.ts`) — NEW
-
-Implements `ModelProvider` using OpenAI's chat completions API:
-- Structured output via `response_format: { type: "json_schema" }`
-- Tool calling via `tools` parameter
-- Multi-turn via `messages` array
-- Supports GPT-4o, GPT-4.1, o3, o4-mini, etc.
-- **Peer dependency**: `openai` package (not bundled — users install if needed)
-
-### 1.4 Google Gemini provider (`src/runtime/providers/gemini-provider.ts`) — NEW
-
-Implements `ModelProvider` using Google's Generative AI SDK:
-- Structured output via `responseMimeType: "application/json"` + `responseSchema`
-- Tool calling via `tools` / `functionDeclarations`
-- **Peer dependency**: `@google/generative-ai`
-
-### 1.5 Ollama provider (`src/runtime/providers/ollama-provider.ts`) — NEW
-
-Implements `ModelProvider` using Ollama's OpenAI-compatible REST API:
-- Structured output via `format: "json"` + schema in system prompt
-- Tool calling via OpenAI-compatible tool format
-- No extra dependency — uses `fetch()` against `http://localhost:11434`
-
-### 1.6 Update `init()` (`src/runtime/init.ts`)
-
-```typescript
-export interface InitOptions {
-  provider?: string | ModelProvider;   // "anthropic" | "openai" | "gemini" | "ollama" | custom instance
-  apiKey?: string;
-  model?: string;
-  baseUrl?: string;
-}
-
-export function init(options: InitOptions = {}): void {
-  if (typeof options.provider === "object") {
-    setProvider(options.provider);    // custom ModelProvider instance
-  } else {
-    const name = options.provider ?? detectProvider(options);
-    setProvider(createProvider(name, options));
-  }
-}
-
-function detectProvider(options: InitOptions): string {
-  if (options.apiKey?.startsWith("sk-ant-")) return "anthropic";
-  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
-  if (process.env.OPENAI_API_KEY) return "openai";
-  if (process.env.GEMINI_API_KEY) return "gemini";
-  return "anthropic"; // default
-}
-```
-
-### 1.7 Update cost tracker (`src/runtime/cost-tracker.ts`)
-
-- Move pricing to a `ModelPricing` map that providers can extend
-- Add `registerPricing(model: string, pricing: { input: number, output: number })`
-- Unknown models get estimated pricing or $0
-
-### 1.8 Update `AnthropicProvider` (`src/runtime/anthropic-provider.ts`)
-
-- Add tool calling support (Anthropic `tools` parameter)
-- Handle `tool_use` content blocks in responses
-- Support multi-turn `messages` passthrough
-
-### 1.9 Exports update (`src/index.ts`)
-
-Export the new provider registry and types:
-```typescript
-export { registerProvider, createProvider } from "./runtime/provider-registry.js";
-export { OpenAIProvider } from "./runtime/providers/openai-provider.js";
-// etc.
-```
+### Problems with docs/
+1. **Homepage (`index.md`) is barebones** -- 30 lines total. No code examples, no quick comparison, no explanation of what makes ThinkLang different. Five feature cards with one-sentence descriptions.
+2. **Sidebar buries library usage** -- "Library Usage" is categorized under "Infrastructure" alongside Testing, Cost Tracking, and Provider System. It should be a first-class entry point.
+3. **Getting Started mixes both paths** -- The page starts with CLI installation, then tacks on library usage at the bottom. A newcomer who only wants the JS/TS library has to scroll past CLI content.
+4. **CLI Reference uses dev commands** -- Shows `npx tsx src/cli/index.ts` instead of `thinklang` in examples. Environment Variables section only mentions `ANTHROPIC_API_KEY`, ignoring multi-provider reality.
+5. **Examples page is language-only** -- No JS/TS library examples despite 10 example files existing in `examples/js/`.
+6. **Inconsistent dual coverage** -- Some guide pages (big-data, agents) show both language and library syntax. Others (guards, confidence, context, match, pipeline) only show ThinkLang syntax. Library users reading those pages get nothing actionable.
 
 ---
 
-## Phase 2: Agentic Capabilities (Runtime)
+## Rewrite Plan
 
-### 2.1 Tool registry (`src/runtime/tools.ts`) — NEW
+### Phase 1: README.md (complete rewrite)
 
-A runtime registry for tools that agents can invoke:
+**New structure:**
 
-```typescript
-export interface Tool<TInput = unknown, TOutput = unknown> {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  execute: (input: TInput) => Promise<TOutput>;
-}
+1. **Hero** -- Name, one-line tagline, one compelling ThinkLang code example
+2. **Two Paths** -- Two clearly separated, equally weighted sections:
+   - **"Use as a Language"** -- `.tl` files, CLI, type system, structured output, the full language experience. Short code example + install command.
+   - **"Use as a Library"** -- `npm install thinklang`, JS/TS import, zero-config. Short code example showing `import { think } from "thinklang"`.
+3. **Features** -- Concise feature showcase. Each feature gets a small code snippet showing BOTH the language syntax and the library equivalent side-by-side where applicable:
+   - AI Primitives (think, infer, reason)
+   - Structured Types / Zod Schemas
+   - Agents & Tools
+   - Guards & Validation
+   - Confidence Tracking
+   - Big Data (batch, map, reduce, stream)
+   - Pattern Matching & Pipeline
+   - Multi-Provider (Anthropic, OpenAI, Gemini, Ollama)
+4. **Supported Providers** -- Concise table
+5. **Quick Start: Language** -- Install, configure env, run first program (compact)
+6. **Quick Start: Library** -- npm install, first think() call (compact)
+7. **IDE Support** -- Brief with link to docs
+8. **Documentation** -- Link to thinklang.dev
+9. **License** -- MIT
 
-export function defineTool<TInput, TOutput>(config: {
-  name: string;
-  description: string;
-  input: ZodType<TInput> | Record<string, unknown>;
-  execute: (input: TInput) => Promise<TOutput>;
-}): Tool<TInput, TOutput>;
+**Removed from README (moved to docs or CLAUDE.md):**
+- Exhaustive example file tables
+- Project Structure section
+- Development section
+
+### Phase 2: VitePress Config (restructure sidebar & nav)
+
+**New nav bar:**
+```
+Guide | Library | Reference | Examples
 ```
 
-### 2.2 Agent loop (`src/runtime/agent.ts`) — NEW
+**New sidebar structure:**
+```
+/guide/
+  Getting Started
+    |- Introduction              (getting-started.md -- rewritten, language-focused)
+    |- Language Tour              (language-tour.md -- refreshed)
+  Language Features
+    |- Types                     (types.md)
+    |- AI Primitives             (ai-primitives.md -- add library notes)
+    |- Context                   (context.md -- add library notes)
+    |- Confidence                (confidence.md -- add library notes)
+    |- Guards                    (guards.md -- add library notes)
+    |- Match                     (match.md -- add library notes)
+    |- Pipeline                  (pipeline.md)
+    |- Agents & Tools            (agents.md)
+    |- Big Data                  (big-data.md)
+    |- Error Handling            (error-handling.md -- add library notes)
+  Tooling
+    |- Testing                   (testing.md)
+    |- Cost Tracking             (cost-tracking.md)
 
-The core agentic runtime — an LLM loop that calls tools until done:
+/library/                         <-- NEW top-level section
+    |- Quick Start               (NEW)
+    |- Core Functions            (NEW)
+    |- Agents & Tools            (NEW)
+    |- Big Data & Streaming      (NEW)
+    |- Custom Providers          (NEW -- merged from guide/providers.md + library-usage.md)
+    |- Error Handling            (NEW)
 
-```typescript
-export interface AgentOptions {
-  prompt: string;
-  tools: Tool[];
-  context?: Record<string, unknown>;
-  maxTurns?: number;           // default 10, safety limit
-  model?: string;
-  jsonSchema?: Record<string, unknown>;  // optional structured final output
-  schemaName?: string;
-  guards?: GuardRule[];
-  onToolCall?: (call: ToolCall) => void;        // observability hook
-  onToolResult?: (result: ToolResult) => void;  // observability hook
-  abortSignal?: AbortSignal;
-}
-
-export async function agent<T = unknown>(options: AgentOptions): Promise<AgentResult<T>> {
-  // 1. Build initial messages with system prompt + user prompt
-  // 2. Loop:
-  //    a. Call provider.complete() with tools + messages
-  //    b. If stopReason === "end_turn" → parse final answer, return
-  //    c. If stopReason === "tool_use" → execute tool calls, append results, continue
-  //    d. If maxTurns reached → throw AgentMaxTurnsError
-  // 3. Apply guards to final result
-  // 4. Track cost for all turns combined
-}
-
-export interface AgentResult<T> {
-  data: T;
-  turns: number;
-  totalUsage: UsageInfo;
-  toolCallHistory: Array<{ call: ToolCall; result: ToolResult }>;
-}
+/reference/
+    |- Syntax                    (syntax.md)
+    |- Types                     (types.md)
+    |- Runtime API               (runtime-api.md -- refreshed)
+    |- CLI                       (cli.md -- fixed)
+    |- Errors                    (errors.md)
 ```
 
-### 2.3 Built-in tools (`src/runtime/builtin-tools.ts`) — NEW
+### Phase 3: docs/index.md (homepage rewrite)
 
-Useful default tools:
+- Better tagline
+- Two action buttons: "Get Started (Language)" + "Get Started (Library)"
+- 6 updated feature cards with better descriptions:
+  1. AI as Syntax
+  2. Type-Safe Output
+  3. Agents & Tools
+  4. Use as a Library
+  5. Multi-Provider
+  6. Production Ready
 
-- `fetchUrl(url) → string` — HTTP GET, returns body text
-- `readFile(path) → string` — read a local file
-- `writeFile(path, content) → void` — write a local file
-- `runCommand(command) → { stdout, stderr, exitCode }` — shell execution (sandboxed, opt-in)
-- `searchWeb(query) → SearchResult[]` — web search (requires API key)
+### Phase 4: docs/guide/getting-started.md (rewrite -- language-focused)
 
-Each is opt-in — users explicitly pass them to `agent()`.
+- Focus exclusively on the language/CLI path
+- Clean flow: install -> configure -> first program -> structured example -> CLI commands -> next steps
+- Remove the library teaser at the bottom (it now has its own section)
+- Add prominent link to "Library Quick Start" for users who want JS/TS only
 
-### 2.4 Error types (`src/runtime/errors.ts`)
+### Phase 5: New docs/library/ pages (6 files)
 
-Add:
-- `AgentMaxTurnsError` — agent hit turn limit
-- `ToolExecutionError` — a tool threw during execution
+Split current `library-usage.md` into focused pages:
+
+1. **quick-start.md** -- Installation, zero-config, Zod schemas, explicit init, multi-provider setup. Pure TypeScript, no ThinkLang syntax.
+2. **core-functions.md** -- think(), infer(), reason() with full examples, options tables, behavior notes.
+3. **agents-tools.md** -- defineTool(), agent(), built-in tools, observability hooks, agent options.
+4. **big-data.md** -- batch(), mapThink(), reduceThink(), Dataset, chunkText/chunkArray, streamThink/streamInfer.
+5. **providers.md** -- Provider system, all 4 providers, custom providers (ModelProvider interface), registerProvider(), auto-detection. Merged content from guide/providers.md + library-usage.md.
+6. **error-handling.md** -- All error types, JS/TS catch patterns, retry patterns.
+
+### Phase 6: Fix docs/reference/cli.md
+
+- Replace all `npx tsx src/cli/index.ts` with `thinklang`
+- Update Environment Variables to list all 4 provider env vars
+- Ensure multi-provider reality is reflected
+
+### Phase 7: docs/examples/index.md (expand)
+
+- Add "Library Examples (JS/TS)" section with the 10 `examples/js/` files
+- Add brief code snippets for the most interesting library examples
+- Keep existing ThinkLang examples section
+
+### Phase 8: Guide pages -- add library equivalents
+
+For each guide page that currently only shows ThinkLang syntax, add a brief "Using from JS/TS" or "Library equivalent" section:
+- `ai-primitives.md` -- show think/infer/reason library calls
+- `context.md` -- show context option in think() calls
+- `confidence.md` -- show Confident<T> class usage from JS/TS
+- `guards.md` -- show guards option in think()/agent() calls
+- `match.md` -- note that match is a language feature, show JS switch/if equivalent
+- `error-handling.md` -- show JS try/catch with ThinkLang error classes
+
+### Phase 9: docs/guide/language-tour.md (refresh)
+
+- Add brief library equivalent notes/links for applicable features
+- Ensure it serves as a complete overview linking to both language and library docs
 
 ---
 
-## Phase 3: Language-Level `agent` Construct
+## Files Changed
 
-### 3.1 Grammar extension (`src/grammar/thinklang.peggy`)
+### New files (6):
+- `docs/library/quick-start.md`
+- `docs/library/core-functions.md`
+- `docs/library/agents-tools.md`
+- `docs/library/big-data.md`
+- `docs/library/providers.md`
+- `docs/library/error-handling.md`
 
-Add `agent` as a new AI expression:
+### Rewritten files (4):
+- `README.md`
+- `docs/index.md`
+- `docs/guide/getting-started.md`
+- `docs/.vitepress/config.ts`
 
-```thinklang
-// Define tools
-tool fetchPrice(ticker: string): float {
-  // regular ThinkLang/JS body
-  return api.getPrice(ticker)
-}
+### Updated files (8):
+- `docs/guide/language-tour.md` -- add library links
+- `docs/guide/ai-primitives.md` -- add library equivalents
+- `docs/guide/context.md` -- add library equivalents
+- `docs/guide/confidence.md` -- add library equivalents
+- `docs/guide/guards.md` -- add library equivalents
+- `docs/guide/match.md` -- add library equivalents
+- `docs/guide/error-handling.md` -- add library equivalents
+- `docs/reference/cli.md` -- fix dev commands, add multi-provider env vars
+- `docs/examples/index.md` -- add JS/TS examples section
 
-// Agent expression
-let result = agent<PortfolioAdvice>("Analyze my portfolio and suggest rebalancing")
-  with tools: fetchPrice, getNews, calculateRisk
-  with context: { portfolio: myPortfolio }
-  max turns: 15
-  guard passes(validateAdvice)
-  on fail retry 2 with fallback { defaultAdvice() }
-```
-
-New grammar rules:
-- `ToolDeclaration` — `tool name(params): returnType { body }`
-- `AgentExpression` — `agent<Type>(prompt) with tools: ... [max turns: N] [guard ...] [on fail ...]`
-
-### 3.2 AST nodes (`src/ast/nodes.ts`)
-
-```typescript
-export interface ToolDeclarationNode {
-  type: "ToolDeclaration";
-  name: string;
-  params: ParameterNode[];
-  returnType: TypeNode;
-  body: StatementNode[];
-  location: Location;
-}
-
-export interface AgentExpressionNode {
-  type: "AgentExpression";
-  typeArgument: TypeNode;
-  prompt: Expression;
-  tools: string[];             // tool names
-  context?: ContextEntry[];
-  maxTurns?: number;
-  guards?: GuardClause[];
-  onFail?: OnFailClause;
-  location: Location;
-}
-```
-
-### 3.3 Checker updates (`src/checker/`)
-
-- Register `tool` declarations in scope (similar to `fn`)
-- Validate tool param types and return types
-- Validate `agent` expression: tools must be in scope, type argument must be defined
-
-### 3.4 Code generator updates (`src/compiler/code-generator.ts`)
-
-Compile `tool` declarations to `defineTool()` calls:
-```typescript
-const fetchPrice = defineTool({
-  name: "fetchPrice",
-  description: "...",
-  input: { type: "object", properties: { ticker: { type: "string" } } },
-  execute: async ({ ticker }) => { /* body */ }
-});
-```
-
-Compile `agent<T>(...)` to `agent()` runtime call:
-```typescript
-const result = await agent<PortfolioAdvice>({
-  prompt: "Analyze my portfolio...",
-  tools: [fetchPrice, getNews, calculateRisk],
-  context: { portfolio: myPortfolio },
-  maxTurns: 15,
-  jsonSchema: { /* PortfolioAdvice schema */ },
-  guards: [...]
-});
-```
-
-### 3.5 LSP updates (`src/lsp/`)
-
-- Add completion for `agent`, `tool` keywords
-- Hover info for tool declarations
-- Go-to-definition for tool references in agent expressions
-- Diagnostics for invalid tool references
-
----
-
-## Phase 4: Library API for JS/TS Users
-
-### 4.1 Final library surface
-
-```typescript
-import { init, think, infer, reason, agent, defineTool, zodSchema } from "thinklang";
-
-// Initialize with any provider
-init({ provider: "openai", apiKey: "sk-..." });
-// or
-init({ provider: "ollama", model: "llama3", baseUrl: "http://localhost:11434" });
-// or bring your own
-init({ provider: myCustomProvider });
-
-// Define tools
-const searchDocs = defineTool({
-  name: "searchDocs",
-  description: "Search internal documentation",
-  input: z.object({ query: z.string() }),
-  execute: async ({ query }) => await docsIndex.search(query),
-});
-
-// Run agent
-const answer = await agent<Answer>({
-  prompt: "Answer this customer question using our docs",
-  tools: [searchDocs],
-  ...zodSchema(AnswerSchema),
-  maxTurns: 5,
-});
-```
-
-### 4.2 Package exports update
-
-```json
-{
-  "exports": {
-    ".": "dist/index.js",
-    "./runtime": "dist/runtime/index.js",
-    "./compiler": "dist/compiler/index.js",
-    "./parser": "dist/parser/index.js",
-    "./tools": "dist/runtime/builtin-tools.js"
-  },
-  "peerDependencies": {
-    "openai": ">=4.0.0",
-    "@google/generative-ai": ">=0.20.0"
-  },
-  "peerDependenciesMeta": {
-    "openai": { "optional": true },
-    "@google/generative-ai": { "optional": true }
-  }
-}
-```
-
----
-
-## Implementation Order
-
-| Step | What | Files | Dependencies |
-|------|------|-------|-------------|
-| 1 | Extend `CompleteOptions`/`CompleteResult` with tool types | `provider.ts` | None |
-| 2 | Provider registry | `provider-registry.ts` (new) | Step 1 |
-| 3 | Update `AnthropicProvider` for tools + multi-turn | `anthropic-provider.ts` | Step 1 |
-| 4 | Update `init()` for multi-provider | `init.ts` | Step 2 |
-| 5 | OpenAI provider | `providers/openai-provider.ts` (new) | Step 1-2 |
-| 6 | Ollama provider | `providers/ollama-provider.ts` (new) | Step 1-2 |
-| 7 | Gemini provider | `providers/gemini-provider.ts` (new) | Step 1-2 |
-| 8 | Update cost tracker | `cost-tracker.ts` | Step 2 |
-| 9 | Tool registry + `defineTool` | `tools.ts` (new) | Step 1 |
-| 10 | Agent loop runtime | `agent.ts` (new) | Steps 1, 9 |
-| 11 | Built-in tools | `builtin-tools.ts` (new) | Step 9 |
-| 12 | Grammar: `tool` + `agent` | `thinklang.peggy` | None |
-| 13 | AST nodes | `nodes.ts` | Step 12 |
-| 14 | Checker updates | `checker/` | Step 13 |
-| 15 | Code generator updates | `code-generator.ts` | Steps 10, 13 |
-| 16 | LSP updates | `lsp/` | Steps 13-14 |
-| 17 | Update exports | `index.ts`, `package.json` | All above |
-| 18 | Tests | `tests/` | All above |
-| 19 | Docs + examples | `docs/`, `examples/` | All above |
-
----
-
-## Design Decisions
-
-1. **Peer dependencies for non-Anthropic SDKs** — keeps `thinklang` lightweight; users install only what they need
-2. **Ollama via fetch, no SDK** — Ollama exposes an OpenAI-compatible API, no extra package needed
-3. **`defineTool` uses Zod or raw JSON Schema** — consistent with existing `zodSchema()` pattern
-4. **Agent loop is a runtime function, not middleware** — keeps it simple, composable, testable
-5. **`maxTurns` safety limit** — prevents runaway agents; configurable per call
-6. **Tool declarations in the language are syntactic sugar** — they compile down to `defineTool()` calls
-7. **Observability hooks (`onToolCall`, `onToolResult`)** — enable logging, debugging, UI integration without coupling
-8. **`abortSignal` support** — enables cancellation from outside (UI, timeout, etc.)
+### Removed files (2):
+- `docs/guide/library-usage.md` -- content split into `docs/library/` pages
+- `docs/guide/providers.md` -- moved/merged into `docs/library/providers.md`
