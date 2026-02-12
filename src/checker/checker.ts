@@ -301,6 +301,15 @@ class TypeChecker {
       case "AgentExpression":
         return this.resolveTypeExpr(expr.typeArgument);
 
+      case "BatchExpression":
+        return { kind: "array", elementType: this.resolveTypeExpr(expr.typeArgument) };
+
+      case "MapThinkExpression":
+        return { kind: "array", elementType: this.resolveTypeExpr(expr.typeArgument) };
+
+      case "ReduceThinkExpression":
+        return this.resolveTypeExpr(expr.typeArgument);
+
       case "PipelineExpression": {
         // Type of a pipeline is the type of the last stage
         let lastType: TlType = makeUnknown();

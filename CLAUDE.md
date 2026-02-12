@@ -21,7 +21,7 @@ npm test          # vitest run (single pass)
 npm run test:watch  # vitest in watch mode
 ```
 
-Tests live in `tests/` and use Vitest with globals enabled. Test timeout is 30s. There are 17 test files covering the grammar, parser, checker, compiler, runtime, integration, caching, guards, match, reason blocks, cost tracking, LSP, imports, the testing framework, init, zod-schema, auto-init, and agentic features.
+Tests live in `tests/` and use Vitest with globals enabled. Test timeout is 30s. There are 23 test files covering the grammar, parser, checker, compiler, runtime, integration, caching, guards, match, reason blocks, cost tracking, LSP, imports, the testing framework, init, zod-schema, auto-init, agentic features, and big data (batch, chunker, dataset, map-reduce, stream, big-data-grammar).
 
 ## Project Structure
 
@@ -48,6 +48,12 @@ src/
 │   ├── tools.ts              # defineTool() + toolToDefinition()
 │   ├── builtin-tools.ts      # Built-in tools: fetchUrl, readFile, writeFile, runCommand
 │   ├── init.ts               # Multi-provider init()
+│   ├── batch.ts              # Batch processing with concurrency control
+│   ├── chunker.ts            # Text and array chunking utilities
+│   ├── stream.ts             # Streaming think/infer via async generators
+│   ├── dataset.ts            # Lazy, chainable Dataset<T> collection
+│   ├── map-reduce.ts         # mapThink() and reduceThink() for collections
+│   ├── data.ts               # Barrel export for "thinklang/data" entry point
 │   └── ...                   # think, infer, reason, guard, cache, cost-tracker, etc.
 └── testing/      # Built-in test framework: runner, assertions, snapshots, replay provider
 thinklang-vscode/ # VS Code extension (TextMate grammar, snippets, LSP client)
@@ -63,7 +69,7 @@ Compilation pipeline: **parse → resolve imports → type check → code genera
 3. Checker validates types with scope tracking (imported functions are registered in scope)
 4. Code generator emits TypeScript that imports from the runtime (imported types/functions are emitted before local declarations)
 
-The language supports `tool` declarations (compiled to `defineTool()` calls) and `agent<T>(prompt) with tools: ...` expressions (compiled to `agent()` calls with multi-turn tool-calling loops).
+The language supports `tool` declarations (compiled to `defineTool()` calls), `agent<T>(prompt) with tools: ...` expressions (compiled to `agent()` calls with multi-turn tool-calling loops), and big data expressions: `batch<T>(items, processor)`, `map_think<T>(items, prompt)`, and `reduce_think<T>(items, prompt)` — compiled to `batch()`, `mapThink()`, and `reduceThink()` runtime calls respectively.
 
 The LSP server (`src/lsp/`) runs a parallel pipeline per document: parse → collect type decls → check → build scope tree → build symbol index. It provides diagnostics, hover, completion, go-to-definition, document symbols, and signature help.
 
@@ -110,6 +116,7 @@ Package entry points (configured via `exports` in package.json):
 - `thinklang/runtime` — runtime only
 - `thinklang/compiler` — compile/compileToAst
 - `thinklang/parser` — parse/parseSync
+- `thinklang/data` — big data: batch, Dataset, mapThink, reduceThink, chunking, streaming
 
 Key library features:
 - **`init(options?)`** (`src/runtime/init.ts`): Multi-provider initializer. Accepts `{ provider, apiKey, model, baseUrl }`. Auto-detects provider from API key format or env vars.
@@ -120,6 +127,12 @@ Key library features:
 - **`registerPricing(model, pricing)`** (`src/runtime/cost-tracker.ts`): Register custom model pricing for cost tracking.
 - **Auto-init**: `getProvider()` auto-initializes from env vars on first use — no explicit init needed.
 - **Generic returns**: `think<T>()`, `infer<T>()`, `reason<T>()`, `agent<T>()` return `Promise<T>` for type-safe results.
+- **`batch(options)`** (`src/runtime/batch.ts`): Process arrays of items with concurrency control, cost budgeting, progress callbacks, and error handling strategies (`fail-fast` or `continue`).
+- **`Dataset.from(items)`** (`src/runtime/dataset.ts`): Lazy, chainable collection with `.map()`, `.filter()`, `.flatMap()`, `.batch()`, `.reduce()`, and `.execute()`. Pipelines are built lazily and only run on `.execute()`.
+- **`mapThink(options)`** (`src/runtime/map-reduce.ts`): Apply `think()` to each item in parallel. Like `Array.map()` but each item is processed by an LLM.
+- **`reduceThink(options)`** (`src/runtime/map-reduce.ts`): Aggregate items via tree-reduction through `think()`. Items are batched, each batch summarized, then summaries recursively reduced.
+- **`chunkText(text, options)`** / **`chunkArray(items, options)`** (`src/runtime/chunker.ts`): Split large text (by paragraph, sentence, or fixed size) or arrays into chunks. Supports overlap for sliding windows. `estimateTokens()` for token counting.
+- **`streamThink(options)`** / **`streamInfer(options)`** (`src/runtime/stream.ts`): Async generators that yield results incrementally as chunks are processed.
 
 ## Provider System
 
@@ -139,7 +152,10 @@ Custom providers: implement the `ModelProvider` interface or register a factory 
 - **`ModelProvider`** (`src/runtime/provider.ts`): `complete(options: CompleteOptions): Promise<CompleteResult>`. `CompleteOptions` includes `tools`, `toolChoice`, `messages` for multi-turn tool calling. `CompleteResult` returns `{ data, usage, model, toolCalls?, stopReason? }`.
 - **`AgentOptions`** / **`AgentResult`** (`src/runtime/agent.ts`): `agent<T>(options)` runs a multi-turn loop. Options include `prompt`, `tools`, `context`, `maxTurns`, `guards`, `onToolCall`, `onToolResult`, `abortSignal`. Result includes `data`, `turns`, `totalUsage`, `toolCallHistory`.
 - **`Tool`** / **`defineTool()`** (`src/runtime/tools.ts`): `defineTool({ name, description, input, execute })` creates a tool. `input` accepts Zod schemas or JSON Schema objects.
-- **`CostTracker`** (`src/runtime/cost-tracker.ts`): `record()`, `getSummary()`, `getRecords()`, `reset()`. `globalCostTracker` singleton is called automatically. Supports `registerPricing()` for custom models. Tracks `"think"`, `"infer"`, `"reason"`, `"agent"`, and `"semantic_assert"` operations.
+- **`CostTracker`** (`src/runtime/cost-tracker.ts`): `record()`, `getSummary()`, `getRecords()`, `reset()`. `globalCostTracker` singleton is called automatically. Supports `registerPricing()` for custom models. Tracks `"think"`, `"infer"`, `"reason"`, `"agent"`, `"semantic_assert"`, `"batch"`, `"map_think"`, and `"reduce_think"` operations.
+- **`BatchResult<T, U>`** (`src/runtime/batch.ts`): `results`, `errors`, `totalItems`, `successCount`, `errorCount`, `totalCostUsd`, `totalDurationMs`.
+- **`Dataset<T>`** (`src/runtime/dataset.ts`): Lazy pipeline builder with `.map()`, `.filter()`, `.flatMap()`, `.batch()`, `.reduce()`, `.execute()`. `DatasetResult<T>` provides `.toArray()`, `.first()`, `.last()`, `.take(n)`, and `[Symbol.iterator]`.
+- **`MapThinkResult<U>`** (`src/runtime/map-reduce.ts`): `results`, `errors`, `totalItems`, `successCount`, `errorCount`, `totalCostUsd`, `totalDurationMs`.
 - **`DocumentManager`** (`src/lsp/document-manager.ts`): `analyze(uri, text): DocumentState`. Returns AST, diagnostics, type declarations, symbol index, and enriched scope.
 - **`ReplayProvider`** (`src/testing/replay-provider.ts`): Implements `ModelProvider`, replays responses from snapshot files for deterministic tests.
 - **`resolveImports`** (`src/compiler/module-resolver.ts`): `resolveImports(imports, filePath, resolving?)` → `{ importedTypes, importedFunctions, errors }`. Resolves relative paths, detects circular imports, parses imported files to extract type and function declarations.

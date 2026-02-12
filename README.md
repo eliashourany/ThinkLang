@@ -67,6 +67,19 @@ match sentiment {
 }
 ```
 
+**Big Data** — Process collections through AI at scale with `batch`, `map_think`, and `reduce_think`. Concurrency control, cost budgeting, streaming, and lazy Dataset pipelines are built in.
+
+```
+let reviews = ["Great!", "Terrible!", "It was okay"]
+
+let sentiments = map_think<Sentiment>(reviews, "Classify this review's sentiment")
+  concurrency: 3
+  cost_budget: 1.00
+
+let summary = reduce_think<string>(sentiments, "Summarize all sentiments into a report")
+  batch_size: 5
+```
+
 **Pipeline Operator** — Chain AI operations with `|>`.
 
 **Reason Blocks** — Multi-step AI reasoning with explicit goals and steps.
@@ -201,6 +214,55 @@ console.log(result.turns);         // number of turns used
 console.log(result.toolCallHistory); // full tool call trace
 ```
 
+### Big data processing
+
+Process collections of items through AI with concurrency control, cost budgeting, and progress tracking:
+
+```typescript
+import { batch, mapThink, reduceThink, Dataset, chunkText, streamThink } from "thinklang";
+
+// batch() — process items with a custom async processor
+const result = await batch({
+  items: reviews,
+  processor: async (review) => think({ prompt: `Classify: ${review}`, ...zodSchema(Sentiment) }),
+  maxConcurrency: 5,
+  costBudget: 1.00,
+  onProgress: (p) => console.log(`${p.completed}/${p.total}`),
+});
+
+// mapThink() — apply think() to each item (simpler API)
+const sentiments = await mapThink({
+  items: reviews,
+  promptTemplate: (review) => `Classify the sentiment of: "${review}"`,
+  ...zodSchema(Sentiment),
+  maxConcurrency: 5,
+});
+
+// reduceThink() — aggregate items via tree-reduction
+const summary = await reduceThink({
+  items: paragraphs,
+  prompt: "Combine into a summary",
+  jsonSchema: { type: "string" },
+  batchSize: 5,
+});
+
+// Dataset — lazy, chainable pipelines
+const positives = await Dataset.from(reviews)
+  .map(async (r) => think({ prompt: `Classify: ${r}`, ...zodSchema(Sentiment) }))
+  .filter(async (s) => s.label === "positive")
+  .execute({ maxConcurrency: 3 });
+
+// chunkText() — split large text for context windows
+const { chunks } = chunkText(longArticle, { maxTokens: 1000, strategy: "paragraph" });
+
+// streamThink() — async generator for incremental results
+for await (const event of streamThink({ prompt: longText, jsonSchema: { type: "string" } })) {
+  console.log(`Chunk ${event.index}: ${event.data}`);
+}
+```
+
+Big data functions are also available via `import { ... } from "thinklang/data"`.
+
 ### Core functions
 
 | Function | Purpose |
@@ -209,6 +271,12 @@ console.log(result.toolCallHistory); // full tool call trace
 | `infer<T>(options)` | Type inference / transformation on a given value |
 | `reason<T>(options)` | Multi-step chain-of-thought reasoning |
 | `agent<T>(options)` | Multi-turn tool-calling agent loop |
+| `batch(options)` | Process items in parallel with concurrency control |
+| `mapThink(options)` | Apply `think()` to each item in a collection |
+| `reduceThink(options)` | Aggregate items via tree-reduction through AI |
+| `Dataset.from(items)` | Lazy, chainable collection pipeline |
+| `chunkText(text, opts)` | Split text by paragraph/sentence/fixed size |
+| `streamThink(options)` | Async generator for chunked AI processing |
 | `defineTool(config)` | Define a tool for use with `agent` |
 | `zodSchema(zodType)` | Convert a Zod schema to JSON Schema for structured output |
 | `init(options?)` | Configure provider, API key, and model |
@@ -363,10 +431,13 @@ The language server runs over stdio and provides:
 | `examples/js/cost-tracking.ts` | Token usage and cost monitoring |
 | `examples/js/agent-tools.ts` | Agent with tools |
 | `examples/js/multi-provider.ts` | Using different providers |
+| `examples/js/batch-processing.ts` | Batch processing with concurrency |
+| `examples/js/dataset-pipeline.ts` | Lazy Dataset pipeline with map/filter |
+| `examples/js/chunking-streaming.ts` | Text chunking and streaming |
 
 ### ThinkLang programs (.tl)
 
-19 example programs in `examples/`:
+22 example programs in `examples/`:
 
 | File | Feature |
 |------|---------|
@@ -389,6 +460,9 @@ The language server runs over stdio and provides:
 | `17-cache-demo.tl` | Response caching |
 | `18-tool-declaration.tl` | Tool declarations |
 | `19-agent-expression.tl` | Agentic tool-calling loops |
+| `20-batch-processing.tl` | Batch processing with `map_think` |
+| `21-reduce-think.tl` | Tree-reduction with `reduce_think` |
+| `22-batch-with-budget.tl` | Cost-budgeted batch processing |
 
 ## Documentation
 
@@ -416,13 +490,14 @@ src/
 ├── parser/       # Wraps the generated Peggy parser
 ├── repl/         # Interactive REPL
 ├── runtime/      # Multi-provider LLM integration: think/infer/reason/agent,
-│                 #   tools, provider registry, caching, cost tracking
+│                 #   tools, provider registry, caching, cost tracking,
+│                 #   batch, dataset, map-reduce, chunking, streaming
 │   └── providers/  # OpenAI, Gemini, Ollama provider implementations
 └── testing/      # Test runner, assertions, snapshots, replay
 thinklang-vscode/ # VS Code extension
 docs/             # VitePress documentation site
-tests/            # Vitest test suite
-examples/         # 19 example programs
+tests/            # Vitest test suite (23 test files)
+examples/         # 22 example programs + JS/TS library examples
 ```
 
 ## Development

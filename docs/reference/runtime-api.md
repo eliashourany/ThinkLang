@@ -9,7 +9,7 @@ npm install thinklang
 ```
 
 ```typescript
-import { init, think, infer, reason, agent, defineTool, zodSchema } from "thinklang";
+import { init, think, infer, reason, agent, defineTool, zodSchema, batch, mapThink, reduceThink, Dataset, chunkText, streamThink } from "thinklang";
 ```
 
 ---
@@ -496,6 +496,205 @@ import { agent, readFile, fetchUrl } from "thinklang";
 
 ---
 
+## Big Data
+
+### `batch<T, U>(options: BatchOptions<T, U>): Promise<BatchResult<T, U>>`
+
+Process an array of items with concurrency control, cost budgeting, and error handling.
+
+```typescript
+interface BatchOptions<T, U> {
+  items: T[];
+  processor: (item: T, index: number) => Promise<U>;
+  maxConcurrency?: number;      // Default: 5
+  costBudget?: number;          // USD threshold — stops when exceeded
+  onError?: "fail-fast" | "continue";  // Default: "continue"
+  onItemComplete?: (event: BatchItemEvent<T, U>) => void;
+  onProgress?: (progress: BatchProgress) => void;
+  abortSignal?: AbortSignal;
+  rateLimit?: number;           // Min ms between item starts
+}
+
+interface BatchResult<T, U> {
+  results: Array<{ index: number; item: T; data: U }>;
+  errors: Array<{ index: number; item: T; error: Error }>;
+  totalItems: number;
+  successCount: number;
+  errorCount: number;
+  totalCostUsd: number;
+  totalDurationMs: number;
+}
+```
+
+**Corresponding ThinkLang syntax:**
+
+```thinklang
+let results = batch<string>(items, processor)
+  concurrency: 5
+  cost_budget: 1.00
+  on_error: continue
+```
+
+---
+
+### `mapThink<T, U>(options: MapThinkOptions<T>): Promise<MapThinkResult<U>>`
+
+Apply `think()` to each item in a collection. Simpler API for the common case of mapping items through AI.
+
+```typescript
+interface MapThinkOptions<T> {
+  items: T[];
+  promptTemplate: (item: T, index: number) => string;
+  jsonSchema: Record<string, unknown>;
+  schemaName?: string;
+  context?: Record<string, unknown>;
+  maxConcurrency?: number;      // Default: 5
+  costBudget?: number;
+  onError?: "fail-fast" | "continue";
+  abortSignal?: AbortSignal;
+}
+```
+
+**Corresponding ThinkLang syntax:**
+
+```thinklang
+let sentiments = map_think<Sentiment>(reviews, "Classify this review")
+  concurrency: 5
+  cost_budget: 1.00
+```
+
+---
+
+### `reduceThink<T, U>(options: ReduceThinkOptions<T>): Promise<U>`
+
+Aggregate items via tree-reduction: items are batched, each batch is summarized by the LLM, then summaries are recursively reduced.
+
+```typescript
+interface ReduceThinkOptions<T> {
+  items: T[];
+  prompt: string;
+  jsonSchema: Record<string, unknown>;
+  schemaName?: string;
+  batchSize?: number;           // Default: 10
+  context?: Record<string, unknown>;
+  maxConcurrency?: number;      // Default: 3
+}
+```
+
+**Corresponding ThinkLang syntax:**
+
+```thinklang
+let summary = reduce_think<string>(paragraphs, "Summarize")
+  batch_size: 5
+```
+
+---
+
+### `Dataset<T>`
+
+Lazy, chainable collection for building data pipelines.
+
+```typescript
+class Dataset<T> {
+  static from<T>(items: T[]): Dataset<T>;
+  static range(start: number, end: number): Dataset<number>;
+
+  map<U>(fn: (item: T, index: number) => Promise<U> | U): Dataset<U>;
+  filter(fn: (item: T, index: number) => Promise<boolean> | boolean): Dataset<T>;
+  flatMap<U>(fn: (item: T, index: number) => Promise<U[]> | U[]): Dataset<U>;
+  batch(size: number): Dataset<T[]>;
+
+  execute(options?: DatasetExecuteOptions): Promise<DatasetResult<T>>;
+  reduce<U>(fn: (acc: U, item: T, index: number) => Promise<U> | U, initial: U): Promise<U>;
+
+  readonly length: number;
+}
+
+interface DatasetExecuteOptions {
+  maxConcurrency?: number;
+  costBudget?: number;
+  onError?: "fail-fast" | "continue";
+  onItemComplete?: (event: { index: number; durationMs: number }) => void;
+  onProgress?: (progress: { completed: number; total: number; costSoFar: number }) => void;
+  abortSignal?: AbortSignal;
+  rateLimit?: number;
+}
+
+class DatasetResult<T> {
+  toArray(): T[];
+  readonly length: number;
+  first(): T | undefined;
+  last(): T | undefined;
+  take(n: number): T[];
+  [Symbol.iterator](): Iterator<T>;
+}
+```
+
+---
+
+### `chunkText(text: string, options?: TextChunkOptions): ChunkResult<string>`
+
+Split large text into chunks that fit within LLM context windows.
+
+```typescript
+interface TextChunkOptions {
+  maxChars?: number;
+  maxTokens?: number;           // ~4 chars per token
+  strategy?: "paragraph" | "sentence" | "fixed";  // Default: "paragraph"
+  overlap?: number;             // Character overlap between chunks
+}
+
+interface ChunkResult<T> {
+  chunks: T[];
+  totalChunks: number;
+}
+```
+
+### `chunkArray<T>(items: T[], options: ArrayChunkOptions): ChunkResult<T[]>`
+
+Split an array into fixed-size chunks.
+
+### `estimateTokens(text: string): number`
+
+Approximate token count (~4 chars per token).
+
+---
+
+### `streamThink<T>(options: StreamThinkOptions): AsyncGenerator<StreamEvent<T>>`
+
+Process large text by chunking and yielding results as each chunk completes.
+
+```typescript
+interface StreamEvent<T> {
+  index: number;
+  data: T;
+  totalChunks: number;
+}
+```
+
+### `streamInfer<T>(options: StreamInferOptions): AsyncGenerator<StreamEvent<T>>`
+
+Process an array of values one at a time via `infer()`, yielding each result.
+
+### `collectStream<T>(gen: AsyncGenerator<StreamEvent<T>>): Promise<T[]>`
+
+Collect all items from a stream into an array.
+
+---
+
+### `BatchCostBudgetExceeded`
+
+Thrown when a batch operation exceeds its cost budget.
+
+```typescript
+class BatchCostBudgetExceeded extends Error {
+  readonly budget: number;
+  readonly spent: number;
+}
+```
+
+---
+
 ## CostTracker
 
 Tracks token usage and estimated costs across all AI operations.
@@ -510,7 +709,7 @@ Records a usage entry.
 
 ```typescript
 record(opts: {
-  operation: "think" | "infer" | "reason" | "agent" | "semantic_assert";
+  operation: "think" | "infer" | "reason" | "agent" | "semantic_assert" | "batch" | "map_think" | "reduce_think";
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -548,7 +747,7 @@ Returns a copy of all individual usage records.
 ```typescript
 interface UsageRecord {
   timestamp: number;
-  operation: "think" | "infer" | "reason" | "agent" | "semantic_assert";
+  operation: "think" | "infer" | "reason" | "agent" | "semantic_assert" | "batch" | "map_think" | "reduce_think";
   model: string;
   inputTokens: number;
   outputTokens: number;
