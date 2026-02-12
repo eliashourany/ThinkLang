@@ -33,12 +33,14 @@ export default defineConfig({
             { text: "Guards", link: "/guide/guards" },
             { text: "Match", link: "/guide/match" },
             { text: "Pipeline", link: "/guide/pipeline" },
+            { text: "Agents & Tools", link: "/guide/agents" },
             { text: "Error Handling", link: "/guide/error-handling" },
           ],
         },
         {
-          text: "Developer Tools",
+          text: "Infrastructure",
           items: [
+            { text: "Provider System", link: "/guide/providers" },
             { text: "Library Usage", link: "/guide/library-usage" },
             { text: "Testing", link: "/guide/testing" },
             { text: "Cost Tracking", link: "/guide/cost-tracking" },

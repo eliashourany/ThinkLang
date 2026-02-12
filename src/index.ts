@@ -9,6 +9,10 @@ export { think, type ThinkOptions } from "./runtime/think.js";
 export { infer, type InferOptions } from "./runtime/infer.js";
 export { reason, type ReasonOptions, type ReasonStep } from "./runtime/reason.js";
 
+// Agentic capabilities
+export { agent, type AgentOptions, type AgentResult } from "./runtime/agent.js";
+export { defineTool, toolToDefinition, type Tool, type DefineToolConfig } from "./runtime/tools.js";
+
 // Zod schema helper
 export { zodSchema, type ZodSchemaResult } from "./runtime/zod-schema.js";
 
@@ -21,9 +25,14 @@ export {
   type CompleteOptions,
   type CompleteResult,
   type UsageInfo,
+  type ToolDefinition,
+  type ToolCall,
+  type ToolResult,
+  type Message,
   setProvider,
   getProvider,
 } from "./runtime/provider.js";
+export { registerProvider, createProvider, getRegisteredProviders, type ProviderOptions, type ProviderFactory } from "./runtime/provider-registry.js";
 export { AnthropicProvider } from "./runtime/anthropic-provider.js";
 
 // Confidence wrapper
@@ -38,6 +47,7 @@ export { truncateContext, excludeFromContext } from "./runtime/context-manager.j
 export {
   CostTracker,
   globalCostTracker,
+  registerPricing,
   type UsageRecord,
   type CostSummary,
   type OperationSummary,
@@ -52,7 +62,12 @@ export {
   TokenBudgetExceeded,
   ModelUnavailable,
   Timeout,
+  AgentMaxTurnsError,
+  ToolExecutionError,
 } from "./runtime/errors.js";
+
+// Built-in tools (opt-in)
+export { fetchUrl, readFile, writeFile, runCommand } from "./runtime/builtin-tools.js";
 
 // Compiler (advanced use)
 export { compile, compileToAst, type CompileOptions, type CompileResult } from "./compiler/index.js";

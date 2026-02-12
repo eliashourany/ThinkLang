@@ -74,3 +74,28 @@ export class Timeout extends ThinkError {
     this.durationMs = durationMs;
   }
 }
+
+export class AgentMaxTurnsError extends ThinkError {
+  readonly maxTurns: number;
+  readonly actualTurns: number;
+
+  constructor(maxTurns: number, actualTurns: number) {
+    super(`Agent reached maximum turns limit: ${actualTurns}/${maxTurns}`);
+    this.name = "AgentMaxTurnsError";
+    this.maxTurns = maxTurns;
+    this.actualTurns = actualTurns;
+  }
+}
+
+export class ToolExecutionError extends ThinkError {
+  readonly toolName: string;
+  readonly cause: unknown;
+
+  constructor(toolName: string, cause: unknown) {
+    const msg = cause instanceof Error ? cause.message : String(cause);
+    super(`Tool "${toolName}" failed: ${msg}`);
+    this.name = "ToolExecutionError";
+    this.toolName = toolName;
+    this.cause = cause;
+  }
+}

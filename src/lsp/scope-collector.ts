@@ -88,6 +88,26 @@ function collectStatementScopes(
       // Types are registered in typeDecls map, no variable binding needed
       break;
 
+    case "ToolDeclaration": {
+      const toolParamTypes = stmt.params.map(p => resolveTypeExpression(p.typeExpr, typeDecls));
+      const toolReturnType = resolveTypeExpression(stmt.returnType, typeDecls);
+      scope.define({
+        name: stmt.name,
+        type: { kind: "function", params: toolParamTypes, returnType: toolReturnType },
+        location: stmt.location,
+      });
+      const toolScope = scope.child(stmt.location);
+      for (const param of stmt.params) {
+        toolScope.define({
+          name: param.name,
+          type: resolveTypeExpression(param.typeExpr, typeDecls),
+          location: param.location,
+        });
+      }
+      collectStatementsScopes(stmt.body, toolScope, typeDecls);
+      break;
+    }
+
     case "FunctionDeclaration": {
       const paramTypes = stmt.params.map(p => resolveTypeExpression(p.typeExpr, typeDecls));
       const returnType = stmt.returnType ? resolveTypeExpression(stmt.returnType, typeDecls) : makeUnknown();
@@ -159,6 +179,8 @@ function inferExprType(expr: AST.ExpressionNode, typeDecls: TypeDeclMap): TlType
     case "InferExpression":
       return resolveTypeExpression(expr.typeArgument, typeDecls);
     case "ReasonBlock":
+      return resolveTypeExpression(expr.typeArgument, typeDecls);
+    case "AgentExpression":
       return resolveTypeExpression(expr.typeArgument, typeDecls);
     case "StringLiteral":
       return makeString();

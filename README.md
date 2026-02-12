@@ -2,7 +2,7 @@
 
 An AI-native programming language where `think` is a keyword.
 
-ThinkLang compiles to TypeScript that calls an LLM runtime, letting you write AI-powered programs with structured types, confidence tracking, guards, and pattern matching — all as first-class language features.
+ThinkLang compiles to TypeScript that calls an LLM runtime, letting you write AI-powered programs with structured types, agentic tool calling, confidence tracking, guards, and pattern matching — all as first-class language features. It is model-agnostic: use Anthropic, OpenAI, Gemini, Ollama, or bring your own provider.
 
 ```
 let greeting = think<string>("Say hello to the world in a creative way")
@@ -24,6 +24,22 @@ type Sentiment {
 let sentiment = think<Confident<Sentiment>>("Analyze the sentiment of this review")
   with context: review
 ```
+
+**Agentic Capabilities** — Declare tools and run multi-turn agent loops as language constructs. The agent calls tools until it arrives at a final answer.
+
+```
+tool searchDocs(query: string): string @description("Search documentation") {
+  let result = think<string>("Search for relevant documentation")
+    with context: query
+  print result
+}
+
+let answer = agent<string>("Find the answer to the user's question")
+  with tools: searchDocs
+  max turns: 5
+```
+
+**Model-Agnostic** — Swap between Anthropic, OpenAI, Gemini, and Ollama with a single environment variable. Custom providers are supported through the `ModelProvider` interface.
 
 **Type-Safe AI Output** — Define structured types that compile to JSON schemas. The LLM is constrained to return valid data matching your types.
 
@@ -66,7 +82,20 @@ print result
 
 **Context Management** — Pass context to AI calls with `with context:` and exclude sensitive data with `without context:`.
 
-**Error Handling** — Typed error hierarchy (`SchemaViolation`, `ConfidenceTooLow`, `GuardFailed`, etc.) with `try`/`catch`.
+**Error Handling** — Typed error hierarchy (`SchemaViolation`, `ConfidenceTooLow`, `GuardFailed`, `AgentMaxTurnsError`, `ToolExecutionError`, etc.) with `try`/`catch`.
+
+## Supported Providers
+
+ThinkLang works with multiple LLM providers out of the box. Only **one** provider is required.
+
+| Provider | Package | Env Var | Default Model |
+|----------|---------|---------|---------------|
+| anthropic | @anthropic-ai/sdk (bundled) | `ANTHROPIC_API_KEY` | claude-opus-4-6 |
+| openai | openai (optional) | `OPENAI_API_KEY` | gpt-4o |
+| gemini | @google/generative-ai (optional) | `GEMINI_API_KEY` | gemini-2.0-flash |
+| ollama | (none) | `OLLAMA_BASE_URL` | llama3 |
+
+The provider is auto-detected from whichever API key is set, or you can specify it explicitly with `init({ provider: "openai" })`.
 
 ## Use as a Library (JS/TS)
 
@@ -123,6 +152,55 @@ const result = await think<string>({
 });
 ```
 
+### Multi-provider usage
+
+```typescript
+import { init, think } from "thinklang";
+
+// Use OpenAI
+init({ provider: "openai", apiKey: "sk-..." });
+
+// Use Gemini
+init({ provider: "gemini", apiKey: "AI..." });
+
+// Use Ollama (local, no API key needed)
+init({ provider: "ollama", baseUrl: "http://localhost:11434" });
+
+// Or bring your own ModelProvider
+init({ provider: myCustomProvider });
+```
+
+### Agent with tools
+
+Define tools and run agentic loops where the LLM calls tools until it produces a final answer:
+
+```typescript
+import { z } from "zod";
+import { init, agent, defineTool, zodSchema } from "thinklang";
+
+// Use any provider
+init({ provider: "openai", apiKey: "sk-..." });
+
+// Define tools
+const searchDocs = defineTool({
+  name: "searchDocs",
+  description: "Search internal documentation",
+  input: z.object({ query: z.string() }),
+  execute: async ({ query }) => await docsIndex.search(query),
+});
+
+// Run an agent
+const result = await agent({
+  prompt: "Find information about authentication",
+  tools: [searchDocs],
+  maxTurns: 5,
+});
+
+console.log(result.data);          // final answer
+console.log(result.turns);         // number of turns used
+console.log(result.toolCallHistory); // full tool call trace
+```
+
 ### Core functions
 
 | Function | Purpose |
@@ -130,8 +208,12 @@ const result = await think<string>({
 | `think<T>(options)` | General-purpose LLM call with structured output |
 | `infer<T>(options)` | Type inference / transformation on a given value |
 | `reason<T>(options)` | Multi-step chain-of-thought reasoning |
+| `agent<T>(options)` | Multi-turn tool-calling agent loop |
+| `defineTool(config)` | Define a tool for use with `agent` |
+| `zodSchema(zodType)` | Convert a Zod schema to JSON Schema for structured output |
+| `init(options?)` | Configure provider, API key, and model |
 
-All three return `Promise<T>` with structured, schema-validated data. See the [Runtime API reference](https://thinklang.dev/reference/runtime-api) and `examples/js/` for more.
+All AI functions return `Promise<T>` with structured, schema-validated data. `agent` returns `Promise<AgentResult<T>>` which includes the data, turn count, total usage, and tool call history. See the [Runtime API reference](https://thinklang.dev/reference/runtime-api) and `examples/js/` for more.
 
 ---
 
@@ -142,7 +224,7 @@ ThinkLang is also a full programming language where `think` is a keyword. Write 
 ### Prerequisites
 
 - Node.js 18+
-- An Anthropic API key
+- An API key for at least one supported provider
 
 ### Install
 
@@ -156,16 +238,29 @@ npx thinklang run hello.tl
 
 ### Configure
 
-Set the `ANTHROPIC_API_KEY` environment variable:
+Set an API key for at least one provider. ThinkLang auto-detects which provider to use based on which key is available.
 
 ```bash
+# Anthropic (default)
 export ANTHROPIC_API_KEY=your-key-here
+
+# Or OpenAI
+export OPENAI_API_KEY=your-key-here
+
+# Or Gemini
+export GEMINI_API_KEY=your-key-here
+
+# Or Ollama (no API key needed)
+export OLLAMA_BASE_URL=http://localhost:11434
 ```
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | — | Anthropic API key |
-| `THINKLANG_MODEL` | No | `claude-opus-4-6` | Model to use |
+| `ANTHROPIC_API_KEY` | One of these | — | Anthropic API key |
+| `OPENAI_API_KEY` | One of these | — | OpenAI API key |
+| `GEMINI_API_KEY` | One of these | — | Google Gemini API key |
+| `OLLAMA_BASE_URL` | One of these | `http://localhost:11434` | Ollama server URL |
+| `THINKLANG_MODEL` | No | Provider default | Override the default model |
 | `THINKLANG_CACHE` | No | `true` | Enable response caching |
 
 ### Run
@@ -240,7 +335,7 @@ thinklang cost-report
 
 The `thinklang-vscode/` directory contains a VS Code extension with:
 
-- Syntax highlighting for all ThinkLang keywords and constructs
+- Syntax highlighting for all ThinkLang keywords and constructs (including `tool` and `agent`)
 - 11 code snippets (`think`, `infer`, `reason`, `type`, `fn`, `match`, `trycatch`, `guard`, `test`, etc.)
 - LSP integration for diagnostics, hover, completion, go-to-definition, document symbols, and signature help
 
@@ -250,10 +345,10 @@ The language server runs over stdio and provides:
 
 - **Diagnostics** — Parse errors and type checker warnings
 - **Hover** — Type information for variables, types, and fields
-- **Completion** — Keywords, types, variables, member completions
-- **Go to Definition** — Jump to type, function, and variable declarations
-- **Document Symbols** — Outline of types, functions, and variables
-- **Signature Help** — Parameter hints for `think<T>()`, `infer<T>()`, and user-defined functions
+- **Completion** — Keywords (`tool`, `agent`, types, variables), member completions
+- **Go to Definition** — Jump to type, function, tool, and variable declarations
+- **Document Symbols** — Outline of types, functions, tools, and variables
+- **Signature Help** — Parameter hints for `think<T>()`, `infer<T>()`, `agent<T>()`, and user-defined functions
 
 ## Examples
 
@@ -266,10 +361,12 @@ The language server runs over stdio and provides:
 | `examples/js/explicit-init.ts` | Explicit `init()` with options |
 | `examples/js/custom-provider.ts` | Custom `ModelProvider` implementation |
 | `examples/js/cost-tracking.ts` | Token usage and cost monitoring |
+| `examples/js/agent-tools.ts` | Agent with tools |
+| `examples/js/multi-provider.ts` | Using different providers |
 
 ### ThinkLang programs (.tl)
 
-17 example programs in `examples/`:
+19 example programs in `examples/`:
 
 | File | Feature |
 |------|---------|
@@ -290,6 +387,8 @@ The language server runs over stdio and provides:
 | `15-try-catch.tl` | Error handling |
 | `16-without-context.tl` | Context exclusion |
 | `17-cache-demo.tl` | Response caching |
+| `18-tool-declaration.tl` | Tool declarations |
+| `19-agent-expression.tl` | Agentic tool-calling loops |
 
 ## Documentation
 
@@ -316,12 +415,14 @@ src/
 ├── lsp/          # Language Server Protocol implementation
 ├── parser/       # Wraps the generated Peggy parser
 ├── repl/         # Interactive REPL
-├── runtime/      # Anthropic SDK, think/infer/reason, caching, cost tracking
+├── runtime/      # Multi-provider LLM integration: think/infer/reason/agent,
+│                 #   tools, provider registry, caching, cost tracking
+│   └── providers/  # OpenAI, Gemini, Ollama provider implementations
 └── testing/      # Test runner, assertions, snapshots, replay
 thinklang-vscode/ # VS Code extension
 docs/             # VitePress documentation site
 tests/            # Vitest test suite
-examples/         # 17 example programs
+examples/         # 19 example programs
 ```
 
 ## Development

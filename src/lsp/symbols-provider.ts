@@ -29,6 +29,18 @@ export function provideDocumentSymbols(state: DocumentState): DocumentSymbol[] {
         break;
       }
 
+      case "ToolDeclaration": {
+        const range = stmt.location ? astLocationToRange(stmt.location) : defaultRange;
+        symbols.push({
+          name: stmt.name,
+          kind: SymbolKind.Function,
+          range,
+          selectionRange: range,
+          detail: "tool",
+        });
+        break;
+      }
+
       case "FunctionDeclaration": {
         const range = stmt.location ? astLocationToRange(stmt.location) : defaultRange;
         symbols.push({

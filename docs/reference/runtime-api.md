@@ -9,7 +9,7 @@ npm install thinklang
 ```
 
 ```typescript
-import { init, think, infer, reason, zodSchema } from "thinklang";
+import { init, think, infer, reason, agent, defineTool, zodSchema } from "thinklang";
 ```
 
 ---
@@ -18,12 +18,14 @@ import { init, think, infer, reason, zodSchema } from "thinklang";
 
 ### `init(options?: InitOptions): void`
 
-Convenience function to configure the runtime. Reads `ANTHROPIC_API_KEY` from environment by default.
+Convenience function to configure the runtime. Auto-detects the provider from environment variables or API key format.
 
 ```typescript
 interface InitOptions {
-  apiKey?: string;   // Defaults to process.env.ANTHROPIC_API_KEY
-  model?: string;    // Defaults to process.env.THINKLANG_MODEL or "claude-opus-4-6"
+  provider?: string | ModelProvider;  // Provider name or custom instance
+  apiKey?: string;                     // API key (auto-detected from env if omitted)
+  model?: string;                      // Defaults to process.env.THINKLANG_MODEL or provider default
+  baseUrl?: string;                    // Custom base URL (for Ollama or proxied endpoints)
 }
 ```
 
@@ -33,11 +35,30 @@ interface InitOptions {
 // Auto-detect from environment
 init();
 
-// Explicit configuration
+// Explicit Anthropic configuration
 init({ apiKey: "sk-ant-...", model: "claude-sonnet-4-20250514" });
+
+// Use OpenAI
+init({ provider: "openai", apiKey: "sk-..." });
+
+// Use Google Gemini
+init({ provider: "gemini", apiKey: "AI..." });
+
+// Use Ollama (local, no API key needed)
+init({ provider: "ollama", model: "llama3" });
+
+// Use a custom ModelProvider instance
+init({ provider: myCustomProvider });
 ```
 
-If you don't call `init()`, the runtime auto-initializes from `ANTHROPIC_API_KEY` on first AI call.
+**Auto-detection order:**
+
+1. If `provider` is specified, use it directly.
+2. If `apiKey` starts with `sk-ant-`, use Anthropic; `sk-`, use OpenAI; `AI`, use Gemini.
+3. Check environment variables: `ANTHROPIC_API_KEY` > `OPENAI_API_KEY` > `GEMINI_API_KEY` > `OLLAMA_BASE_URL`.
+4. Fall back to Anthropic.
+
+If you don't call `init()`, the runtime auto-initializes from environment variables on first AI call.
 
 ---
 
@@ -368,6 +389,113 @@ class Timeout extends ThinkError {
 
 ---
 
+## Agent
+
+### `agent<T = unknown>(options: AgentOptions): Promise<AgentResult<T>>`
+
+Runs an agentic loop: the LLM calls tools until it produces a final answer.
+
+```typescript
+interface AgentOptions {
+  prompt: string;                        // The goal for the agent
+  tools: Tool[];                         // Tools the agent can call
+  context?: Record<string, unknown>;     // Context data
+  maxTurns?: number;                     // Maximum loop iterations (default: 10)
+  model?: string;                        // Model override
+  jsonSchema?: Record<string, unknown>;  // JSON Schema for the final output
+  schemaName?: string;                   // Optional schema name
+  guards?: GuardRule[];                  // Validation rules for the final output
+  retryCount?: number;                   // Retry the entire loop on failure
+  fallback?: () => unknown;              // Fallback if all retries fail
+  onToolCall?: (call: ToolCall) => void; // Called before each tool executes
+  onToolResult?: (result: ToolResult & { toolName: string }) => void;  // Called after each tool
+  abortSignal?: AbortSignal;             // Cancel the agent loop
+}
+
+interface AgentResult<T = unknown> {
+  data: T;                                                  // The final answer
+  turns: number;                                            // Number of loop iterations
+  totalUsage: UsageInfo;                                    // Aggregated token usage
+  toolCallHistory: Array<{ call: ToolCall; result: ToolResult }>;  // Full tool call log
+}
+```
+
+**Behavior:**
+
+1. Sends the prompt to the LLM along with tool definitions.
+2. If the LLM returns tool calls, executes each tool and feeds results back.
+3. Repeats until the LLM produces a final answer or `maxTurns` is reached.
+4. Applies guards to the final result (if configured).
+5. Records aggregated usage in the global `CostTracker`.
+6. Throws `AgentMaxTurnsError` if the turn limit is reached without a final answer.
+
+**Corresponding ThinkLang syntax:**
+
+```thinklang
+let answer = agent<string>("Find the answer")
+  with tools: searchDocs, readFile
+  max turns: 5
+```
+
+---
+
+## Tools
+
+### `defineTool<TInput, TOutput>(config): Tool<TInput, TOutput>`
+
+Creates a tool that can be used by the agent runtime. Accepts Zod schemas or raw JSON Schema for the input.
+
+```typescript
+interface DefineToolConfig<TInput, TOutput> {
+  name: string;                                    // Tool identifier
+  description: string;                             // Helps the AI decide when to use this tool
+  input: ZodType<TInput> | Record<string, unknown>;  // Input schema (Zod or JSON Schema)
+  execute: (input: TInput) => Promise<TOutput>;    // Function that runs when the tool is called
+}
+
+interface Tool<TInput = unknown, TOutput = unknown> {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  execute: (input: TInput) => Promise<TOutput>;
+}
+```
+
+**Example:**
+
+```typescript
+import { defineTool } from "thinklang";
+import { z } from "zod";
+
+const searchDocs = defineTool({
+  name: "searchDocs",
+  description: "Search internal documentation",
+  input: z.object({ query: z.string() }),
+  execute: async ({ query }) => await docsIndex.search(query),
+});
+```
+
+### `toolToDefinition(tool: Tool): ToolDefinition`
+
+Converts a `Tool` to the `ToolDefinition` format used internally by providers.
+
+### Built-in Tools
+
+ThinkLang ships with opt-in built-in tools:
+
+| Tool | Input | Output | Description |
+|------|-------|--------|-------------|
+| `fetchUrl` | `{ url: string }` | `string` | HTTP GET a URL |
+| `readFile` | `{ path: string }` | `string` | Read a local file |
+| `writeFile` | `{ path: string, content: string }` | `void` | Write to a local file |
+| `runCommand` | `{ command: string }` | `{ stdout, stderr, exitCode }` | Run a shell command |
+
+```typescript
+import { agent, readFile, fetchUrl } from "thinklang";
+```
+
+---
+
 ## CostTracker
 
 Tracks token usage and estimated costs across all AI operations.
@@ -382,7 +510,7 @@ Records a usage entry.
 
 ```typescript
 record(opts: {
-  operation: "think" | "infer" | "reason" | "semantic_assert";
+  operation: "think" | "infer" | "reason" | "agent" | "semantic_assert";
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -420,7 +548,7 @@ Returns a copy of all individual usage records.
 ```typescript
 interface UsageRecord {
   timestamp: number;
-  operation: "think" | "infer" | "reason" | "semantic_assert";
+  operation: "think" | "infer" | "reason" | "agent" | "semantic_assert";
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -434,16 +562,40 @@ interface UsageRecord {
 
 Clears all recorded usage data.
 
+### `registerPricing(model, pricing): void`
+
+Register custom pricing for a model not in the built-in table. Pricing is per million tokens (USD).
+
+```typescript
+import { registerPricing } from "thinklang";
+registerPricing("my-custom-model", { input: 5, output: 20 });
+```
+
 ### Supported Model Pricing
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) |
 |-------|----------------------|------------------------|
+| **Anthropic** | | |
 | `claude-opus-4-6` | $15.00 | $75.00 |
 | `claude-sonnet-4-5-20250929` | $3.00 | $15.00 |
 | `claude-haiku-4-5-20251001` | $0.80 | $4.00 |
 | `claude-3-5-sonnet-20241022` | $3.00 | $15.00 |
 | `claude-3-5-haiku-20241022` | $0.80 | $4.00 |
 | `claude-3-opus-20240229` | $15.00 | $75.00 |
+| **OpenAI** | | |
+| `gpt-4o` | $2.50 | $10.00 |
+| `gpt-4o-mini` | $0.15 | $0.60 |
+| `gpt-4.1` | $2.00 | $8.00 |
+| `gpt-4.1-mini` | $0.40 | $1.60 |
+| `gpt-4.1-nano` | $0.10 | $0.40 |
+| `o3` | $10.00 | $40.00 |
+| `o4-mini` | $1.10 | $4.40 |
+| **Google Gemini** | | |
+| `gemini-2.0-flash` | $0.10 | $0.40 |
+| `gemini-2.5-pro` | $1.25 | $10.00 |
+| `gemini-2.5-flash` | $0.15 | $0.60 |
+
+Models not in the table use a default estimate of $3/$15 per million tokens. Use `registerPricing()` to set accurate costs for custom models.
 
 ---
 
@@ -486,21 +638,58 @@ interface ModelProvider {
 interface CompleteOptions {
   systemPrompt: string;
   userMessage: string;
-  jsonSchema: Record<string, unknown>;
+  jsonSchema?: Record<string, unknown>;       // JSON Schema for structured output
   schemaName?: string;
   model?: string;
   maxTokens?: number;
+  tools?: ToolDefinition[];                   // Tool definitions for agent mode
+  toolChoice?: "auto" | "required" | "none" | { name: string };
+  messages?: Message[];                       // Conversation history for agent mode
+  stopSequences?: string[];
 }
 
 interface CompleteResult {
   data: unknown;
   usage: UsageInfo;
   model: string;
+  toolCalls?: ToolCall[];                     // Tool calls made by the LLM
+  stopReason?: "end_turn" | "tool_use" | "max_tokens" | "stop_sequence";
 }
 
 interface UsageInfo {
   inputTokens: number;
   outputTokens: number;
+}
+```
+
+### Tool Calling Types
+
+These types support the agent runtime's tool-calling protocol:
+
+```typescript
+interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+interface ToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+interface ToolResult {
+  toolCallId: string;
+  output: unknown;
+  isError?: boolean;
+}
+
+interface Message {
+  role: "user" | "assistant" | "tool_result";
+  content: string;
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
 }
 ```
 
@@ -510,16 +699,46 @@ Registers a `ModelProvider` as the active provider for all AI calls.
 
 ### `getProvider(): ModelProvider`
 
-Returns the currently configured provider. If no provider has been explicitly set, auto-initializes from the `ANTHROPIC_API_KEY` environment variable. Throws if no provider is configured and no env var is available.
+Returns the currently configured provider. If no provider has been explicitly set, auto-initializes from environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY`). Throws if no provider is configured and no env var is available.
 
-### `AnthropicProvider`
+### Provider Registry
 
-The built-in provider that uses the Anthropic SDK. Configured automatically when `ANTHROPIC_API_KEY` is set.
+#### `registerProvider(name: string, factory: ProviderFactory): void`
+
+Registers a provider factory so it can be referenced by name in `init()` and `createProvider()`.
 
 ```typescript
-class AnthropicProvider implements ModelProvider {
-  constructor(apiKey: string)
+type ProviderFactory = (options: ProviderOptions) => ModelProvider;
+
+interface ProviderOptions {
+  apiKey?: string;
+  model?: string;
+  baseUrl?: string;
 }
+```
+
+#### `createProvider(name: string, options?: ProviderOptions): ModelProvider`
+
+Creates a provider instance from the registry by name.
+
+#### `getRegisteredProviders(): string[]`
+
+Returns the names of all registered providers.
+
+### Built-in Providers
+
+| Provider | Class | Package | Auto-detected from |
+|----------|-------|---------|-------------------|
+| `"anthropic"` | `AnthropicProvider` | `@anthropic-ai/sdk` (included) | `ANTHROPIC_API_KEY` |
+| `"openai"` | `OpenAIProvider` | `openai` (peer dep) | `OPENAI_API_KEY` |
+| `"gemini"` | `GeminiProvider` | `@google/generative-ai` (peer dep) | `GEMINI_API_KEY` |
+| `"ollama"` | `OllamaProvider` | none (HTTP API) | `OLLAMA_BASE_URL` |
+
+OpenAI and Gemini require installing the corresponding SDK package as a peer dependency:
+
+```bash
+npm install openai                    # for OpenAI
+npm install @google/generative-ai     # for Google Gemini
 ```
 
 ---
