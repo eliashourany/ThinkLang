@@ -359,6 +359,9 @@ PrimaryExpression
   / InferExpression
   / ReasonBlock
   / AgentExpression
+  / BatchExpression
+  / MapThinkExpression
+  / ReduceThinkExpression
   / MatchExpression
   / ObjectLiteral
   / ArrayLiteral
@@ -417,6 +420,69 @@ AgentExpression
       onFail: onFail ? onFail[1] : null,
       location: loc()
     };
+  }
+
+// ─── Phase 5: Big Data Expressions ──────────────────────
+
+BatchExpression
+  = "batch" _ "<" _ typeArg:TypeExpression _ ">" _ "(" _ items:Expression _ "," _ processor:Expression _ ")" concurrency:(__ ConcurrencyClause)? costBudget:(__ CostBudgetClause)? onError:(__ OnErrorClause)? {
+    return {
+      type: "BatchExpression",
+      typeArgument: typeArg,
+      items,
+      processor,
+      concurrency: concurrency ? concurrency[1] : null,
+      costBudget: costBudget ? costBudget[1] : null,
+      onError: onError ? onError[1] : null,
+      location: loc()
+    };
+  }
+
+MapThinkExpression
+  = "map_think" _ "<" _ typeArg:TypeExpression _ ">" _ "(" _ items:Expression _ "," _ promptTemplate:Expression _ ")" concurrency:(__ ConcurrencyClause)? costBudget:(__ CostBudgetClause)? withCtx:(__ WithClause)? {
+    return {
+      type: "MapThinkExpression",
+      typeArgument: typeArg,
+      items,
+      promptTemplate,
+      concurrency: concurrency ? concurrency[1] : null,
+      costBudget: costBudget ? costBudget[1] : null,
+      withContext: withCtx ? withCtx[1] : null,
+      location: loc()
+    };
+  }
+
+ReduceThinkExpression
+  = "reduce_think" _ "<" _ typeArg:TypeExpression _ ">" _ "(" _ items:Expression _ "," _ prompt:Expression _ ")" batchSize:(__ BatchSizeClause)? withCtx:(__ WithClause)? {
+    return {
+      type: "ReduceThinkExpression",
+      typeArgument: typeArg,
+      items,
+      prompt,
+      batchSize: batchSize ? batchSize[1] : null,
+      withContext: withCtx ? withCtx[1] : null,
+      location: loc()
+    };
+  }
+
+ConcurrencyClause
+  = "concurrency" _ ":" _ count:Integer {
+    return count;
+  }
+
+CostBudgetClause
+  = "cost_budget" _ ":" _ amount:Number {
+    return amount;
+  }
+
+OnErrorClause
+  = "on_error" _ ":" _ strategy:("fail_fast" / "continue") {
+    return strategy === "fail_fast" ? "fail-fast" : "continue";
+  }
+
+BatchSizeClause
+  = "batch_size" _ ":" _ size:Integer {
+    return size;
   }
 
 WithToolsClause
@@ -673,7 +739,8 @@ ReservedWord
     / "match" / "try" / "catch" / "if" / "else" / "true" / "false" / "null"
     / "Confident" / "string" / "int" / "float" / "bool"
     / "test" / "assert" / "import" / "from"
-    / "tool" / "agent") !IdentContinue
+    / "tool" / "agent"
+    / "batch" / "map_think" / "reduce_think") !IdentContinue
 
 // ─── Whitespace & Comments ────────────────────────────────
 

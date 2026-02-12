@@ -36,3 +36,10 @@ export { AnthropicProvider } from "./anthropic-provider.js";
 export { CostTracker, globalCostTracker, registerPricing, type UsageRecord, type CostSummary, type OperationSummary } from "./cost-tracker.js";
 export { init, type InitOptions } from "./init.js";
 export { zodSchema, type ZodSchemaResult } from "./zod-schema.js";
+
+// Big Data: batch processing, chunking, streaming, dataset, map-reduce
+export { batch, type BatchOptions, type BatchResult, type BatchItemEvent, type BatchProgress, BatchCostBudgetExceeded, BatchAbortedError } from "./batch.js";
+export { chunkText, chunkArray, estimateTokens, type TextChunkOptions, type ArrayChunkOptions, type ChunkResult } from "./chunker.js";
+export { streamThink, streamInfer, collectStream, type StreamThinkOptions, type StreamInferOptions, type StreamEvent } from "./stream.js";
+export { Dataset, DatasetResult, type DatasetExecuteOptions } from "./dataset.js";
+export { mapThink, reduceThink, type MapThinkOptions, type MapThinkResult, type ReduceThinkOptions } from "./map-reduce.js";

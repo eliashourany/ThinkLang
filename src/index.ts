@@ -69,5 +69,12 @@ export {
 // Built-in tools (opt-in)
 export { fetchUrl, readFile, writeFile, runCommand } from "./runtime/builtin-tools.js";
 
+// Big Data
+export { batch, type BatchOptions, type BatchResult, type BatchItemEvent, type BatchProgress, BatchCostBudgetExceeded, BatchAbortedError } from "./runtime/batch.js";
+export { chunkText, chunkArray, estimateTokens, type TextChunkOptions, type ArrayChunkOptions, type ChunkResult } from "./runtime/chunker.js";
+export { streamThink, streamInfer, collectStream, type StreamThinkOptions, type StreamInferOptions, type StreamEvent } from "./runtime/stream.js";
+export { Dataset, DatasetResult, type DatasetExecuteOptions } from "./runtime/dataset.js";
+export { mapThink, reduceThink, type MapThinkOptions, type MapThinkResult, type ReduceThinkOptions } from "./runtime/map-reduce.js";
+
 // Compiler (advanced use)
 export { compile, compileToAst, type CompileOptions, type CompileResult } from "./compiler/index.js";

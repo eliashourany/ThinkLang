@@ -349,6 +349,12 @@ class CodeGenerator {
         return this.emitReasonBlock(expr);
       case "AgentExpression":
         return this.emitAgentExpr(expr);
+      case "BatchExpression":
+        return this.emitBatchExpr(expr);
+      case "MapThinkExpression":
+        return this.emitMapThinkExpr(expr);
+      case "ReduceThinkExpression":
+        return this.emitReduceThinkExpr(expr);
       case "PipelineExpression":
         return this.emitPipeline(expr);
       case "MatchExpression":
@@ -506,6 +512,67 @@ class CodeGenerator {
     }
 
     return `__tl_runtime.agent({ ${parts.join(", ")} })`;
+  }
+
+  private emitBatchExpr(expr: AST.BatchExpressionNode): string {
+    const items = this.emitExpr(expr.items);
+    const processor = this.emitExpr(expr.processor);
+    const parts = [`items: ${items}`, `processor: ${processor}`];
+
+    if (expr.concurrency) {
+      parts.push(`maxConcurrency: ${expr.concurrency}`);
+    }
+    if (expr.costBudget) {
+      parts.push(`costBudget: ${expr.costBudget}`);
+    }
+    if (expr.onError) {
+      parts.push(`onError: ${JSON.stringify(expr.onError)}`);
+    }
+
+    return `__tl_runtime.batch({ ${parts.join(", ")} })`;
+  }
+
+  private emitMapThinkExpr(expr: AST.MapThinkExpressionNode): string {
+    const schema = JSON.stringify(typeExprToJsonSchema(expr.typeArgument, this.typeDecls));
+    const items = this.emitExpr(expr.items);
+    const promptTemplate = this.emitExpr(expr.promptTemplate);
+    const parts = [
+      `items: ${items}`,
+      `promptTemplate: ${promptTemplate}`,
+      `jsonSchema: ${schema}`,
+    ];
+
+    if (expr.concurrency) {
+      parts.push(`maxConcurrency: ${expr.concurrency}`);
+    }
+    if (expr.costBudget) {
+      parts.push(`costBudget: ${expr.costBudget}`);
+    }
+    if (expr.withContext) {
+      parts.push(`context: ${this.emitContextArg(expr.withContext)}`);
+    }
+
+    return `__tl_runtime.mapThink({ ${parts.join(", ")} })`;
+  }
+
+  private emitReduceThinkExpr(expr: AST.ReduceThinkExpressionNode): string {
+    const schema = JSON.stringify(typeExprToJsonSchema(expr.typeArgument, this.typeDecls));
+    const items = this.emitExpr(expr.items);
+    const prompt = this.emitExpr(expr.prompt);
+    const parts = [
+      `items: ${items}`,
+      `prompt: ${prompt}`,
+      `jsonSchema: ${schema}`,
+    ];
+
+    if (expr.batchSize) {
+      parts.push(`batchSize: ${expr.batchSize}`);
+    }
+    if (expr.withContext) {
+      parts.push(`context: ${this.emitContextArg(expr.withContext)}`);
+    }
+
+    return `__tl_runtime.reduceThink({ ${parts.join(", ")} })`;
   }
 
   private emitPipeline(expr: AST.PipelineExpressionNode): string {
@@ -683,6 +750,9 @@ class CodeGenerator {
       case "InferExpression":
       case "ReasonBlock":
       case "AgentExpression":
+      case "BatchExpression":
+      case "MapThinkExpression":
+      case "ReduceThinkExpression":
       case "PipelineExpression":
         return true;
       case "FunctionCallExpression":

@@ -1,6 +1,6 @@
 export interface UsageRecord {
   timestamp: number;
-  operation: "think" | "infer" | "reason" | "agent" | "semantic_assert";
+  operation: "think" | "infer" | "reason" | "agent" | "semantic_assert" | "batch" | "map_think" | "reduce_think";
   model: string;
   inputTokens: number;
   outputTokens: number;

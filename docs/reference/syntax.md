@@ -385,6 +385,61 @@ let plan = agent<TripPlan>("Plan a trip to Barcelona")
 | `guard { ... }` | No | Guard rules for the final output |
 | `on_fail:` | No | Retry/fallback strategy |
 
+### `batch<T>(items, processor)` -- Batch Expression
+
+Process a collection of items with concurrency control.
+
+```thinklang
+let results = batch<string>(items, processor)
+  concurrency: 3
+  cost_budget: 1.00
+  on_error: continue
+```
+
+| Clause | Required | Description |
+|--------|----------|-------------|
+| `concurrency: N` | No | Max parallel operations (default: 5) |
+| `cost_budget: N` | No | Stop when cost exceeds $N |
+| `on_error: strategy` | No | `fail_fast` or `continue` (default) |
+
+---
+
+### `map_think<T>(items, prompt)` -- Map Think Expression
+
+Apply `think()` to each item in a collection.
+
+```thinklang
+let sentiments = map_think<Sentiment>(reviews, "Classify this review")
+  concurrency: 5
+  cost_budget: 2.00
+  with context: { config }
+```
+
+| Clause | Required | Description |
+|--------|----------|-------------|
+| `concurrency: N` | No | Max parallel operations |
+| `cost_budget: N` | No | Cost budget in USD |
+| `with context:` | No | Shared context for all items |
+
+---
+
+### `reduce_think<T>(items, prompt)` -- Reduce Think Expression
+
+Aggregate items via tree-reduction through AI.
+
+```thinklang
+let summary = reduce_think<string>(paragraphs, "Summarize")
+  batch_size: 5
+  with context: { style }
+```
+
+| Clause | Required | Description |
+|--------|----------|-------------|
+| `batch_size: N` | No | Items per reduction batch (default: 10) |
+| `with context:` | No | Additional context |
+
+---
+
 ### Pipeline `|>`
 
 Chains expressions left to right.
@@ -557,4 +612,4 @@ The following words cannot be used as identifiers:
 | `if` | `else` | `true` | `false` | `null` |
 | `Confident` | `string` | `int` | `float` | `bool` |
 | `test` | `assert` | `import` | `from` | `tool` |
-| `agent` | | | | |
+| `agent` | `batch` | `map_think` | `reduce_think` | |

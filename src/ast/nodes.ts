@@ -176,6 +176,9 @@ export type ExpressionNode =
   | InferExpressionNode
   | ReasonBlockNode
   | AgentExpressionNode
+  | BatchExpressionNode
+  | MapThinkExpressionNode
+  | ReduceThinkExpressionNode
   | PipelineExpressionNode
   | FunctionCallExpressionNode
   | MemberExpressionNode
@@ -482,5 +485,39 @@ export interface AgentExpressionNode {
   maxTurns?: number;
   guard?: GuardClauseNode;
   onFail?: OnFailClauseNode;
+  location?: Location;
+}
+
+// ─── Phase 5: Big Data ────────────────────────────────────
+
+export interface BatchExpressionNode {
+  type: "BatchExpression";
+  typeArgument: TypeExpressionNode;
+  items: ExpressionNode;
+  processor: ExpressionNode;
+  concurrency?: number;
+  costBudget?: number;
+  onError?: string;
+  location?: Location;
+}
+
+export interface MapThinkExpressionNode {
+  type: "MapThinkExpression";
+  typeArgument: TypeExpressionNode;
+  items: ExpressionNode;
+  promptTemplate: ExpressionNode;
+  concurrency?: number;
+  costBudget?: number;
+  withContext?: ContextExpressionNode;
+  location?: Location;
+}
+
+export interface ReduceThinkExpressionNode {
+  type: "ReduceThinkExpression";
+  typeArgument: TypeExpressionNode;
+  items: ExpressionNode;
+  prompt: ExpressionNode;
+  batchSize?: number;
+  withContext?: ContextExpressionNode;
   location?: Location;
 }

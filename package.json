@@ -21,6 +21,10 @@
     "./parser": {
       "import": "./dist/parser/index.js",
       "types": "./dist/parser/index.d.ts"
+    },
+    "./data": {
+      "import": "./dist/runtime/data.js",
+      "types": "./dist/runtime/data.d.ts"
     }
   },
   "bin": {
@@ -79,7 +83,12 @@
     "agentic",
     "tools",
     "model-agnostic",
-    "function-calling"
+    "function-calling",
+    "batch",
+    "dataset",
+    "map-reduce",
+    "big-data",
+    "streaming"
   ],
   "peerDependencies": {
     "openai": "^4.0.0",
