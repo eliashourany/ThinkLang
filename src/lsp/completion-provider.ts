@@ -26,6 +26,8 @@ const KEYWORDS: CompletionItem[] = [
   { label: "uncertain", kind: CompletionItemKind.Keyword, detail: "Uncertain type modifier" },
   { label: "test", kind: CompletionItemKind.Keyword, detail: "Test block" },
   { label: "assert", kind: CompletionItemKind.Keyword, detail: "Assertion" },
+  { label: "tool", kind: CompletionItemKind.Keyword, detail: "Tool declaration" },
+  { label: "agent", kind: CompletionItemKind.Keyword, detail: "AI agent expression" },
 ];
 
 const PRIMITIVE_TYPES: CompletionItem[] = [

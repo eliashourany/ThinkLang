@@ -4,7 +4,7 @@ import type { TlType } from "../checker/types.js";
 
 export interface SymbolInfo {
   name: string;
-  kind: "type" | "function" | "variable";
+  kind: "type" | "function" | "variable" | "tool";
   location: Location;
   type?: TlType;
 }
@@ -32,6 +32,11 @@ export class SymbolIndex {
         case "TypeDeclaration":
           if (stmt.location) {
             index.add({ name: stmt.name, kind: "type", location: stmt.location });
+          }
+          break;
+        case "ToolDeclaration":
+          if (stmt.location) {
+            index.add({ name: stmt.name, kind: "tool", location: stmt.location });
           }
           break;
         case "FunctionDeclaration":

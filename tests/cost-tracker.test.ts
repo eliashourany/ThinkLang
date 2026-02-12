@@ -103,8 +103,8 @@ describe("CostTracker", () => {
     });
 
     const summary = tracker.getSummary();
-    // Falls back to claude-opus-4-6 pricing
-    expect(summary.totalCostUsd).toBeCloseTo(90, 2);
+    // Falls back to default pricing (input: 3, output: 15 per million tokens)
+    expect(summary.totalCostUsd).toBeCloseTo(18, 2);
   });
 
   it("records timestamp", () => {

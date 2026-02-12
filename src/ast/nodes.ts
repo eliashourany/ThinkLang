@@ -1,4 +1,4 @@
-// ThinkLang AST Node Definitions — Phase 1 & Phase 2
+// ThinkLang AST Node Definitions — Phase 1, Phase 2 & Phase 4 (Agentic)
 
 export interface Location {
   start: { offset: number; line: number; column: number };
@@ -27,6 +27,7 @@ export interface ProgramNode {
 
 export type StatementNode =
   | TypeDeclarationNode
+  | ToolDeclarationNode
   | FunctionDeclarationNode
   | LetDeclarationNode
   | PrintStatementNode
@@ -174,6 +175,7 @@ export type ExpressionNode =
   | ThinkExpressionNode
   | InferExpressionNode
   | ReasonBlockNode
+  | AgentExpressionNode
   | PipelineExpressionNode
   | FunctionCallExpressionNode
   | MemberExpressionNode
@@ -456,5 +458,29 @@ export interface AssertStatementNode {
   expression?: ExpressionNode;
   subject?: ExpressionNode;
   criteria?: ExpressionNode;
+  location?: Location;
+}
+
+// ─── Phase 4: Agentic ────────────────────────────────────
+
+export interface ToolDeclarationNode {
+  type: "ToolDeclaration";
+  name: string;
+  params: FunctionParamNode[];
+  returnType: TypeExpressionNode;
+  description?: string;
+  body: StatementNode[];
+  location?: Location;
+}
+
+export interface AgentExpressionNode {
+  type: "AgentExpression";
+  typeArgument: TypeExpressionNode;
+  prompt: ExpressionNode;
+  tools: string[];
+  withContext?: ContextExpressionNode;
+  maxTurns?: number;
+  guard?: GuardClauseNode;
+  onFail?: OnFailClauseNode;
   location?: Location;
 }

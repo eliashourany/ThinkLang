@@ -69,10 +69,30 @@
     "transpiler",
     "typescript",
     "anthropic",
+    "openai",
+    "gemini",
+    "ollama",
     "ai-native",
     "structured-output",
-    "language"
+    "language",
+    "agent",
+    "agentic",
+    "tools",
+    "model-agnostic",
+    "function-calling"
   ],
+  "peerDependencies": {
+    "openai": "^4.0.0",
+    "@google/generative-ai": "^0.21.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": {
+      "optional": true
+    },
+    "@google/generative-ai": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "peggy": "^3.0.2",

@@ -87,7 +87,7 @@ class CodeGenerator {
       const mainBody: AST.StatementNode[] = [];
 
       for (const stmt of program.body) {
-        if (stmt.type === "TypeDeclaration" || stmt.type === "FunctionDeclaration") {
+        if (stmt.type === "TypeDeclaration" || stmt.type === "FunctionDeclaration" || stmt.type === "ToolDeclaration") {
           topLevel.push(stmt);
         } else {
           mainBody.push(stmt);
@@ -119,6 +119,9 @@ class CodeGenerator {
     switch (stmt.type) {
       case "TypeDeclaration":
         this.emitTypeDeclaration(stmt);
+        break;
+      case "ToolDeclaration":
+        this.emitToolDeclaration(stmt);
         break;
       case "FunctionDeclaration":
         this.emitFunctionDeclaration(stmt);
@@ -154,6 +157,33 @@ class CodeGenerator {
       return `${f.name}${optional}: ${typeExprToTsType(f.typeExpr)}`;
     });
     this.emit(`// type ${decl.name} { ${fields.join("; ")} }`);
+  }
+
+  private emitToolDeclaration(decl: AST.ToolDeclarationNode): void {
+    const params = decl.params.map(p => p.name).join(", ");
+    const inputSchemaProps: string[] = [];
+    const requiredFields: string[] = [];
+    for (const p of decl.params) {
+      const fieldSchema = JSON.stringify(typeExprToJsonSchema(p.typeExpr, this.typeDecls));
+      inputSchemaProps.push(`${JSON.stringify(p.name)}: ${fieldSchema}`);
+      requiredFields.push(JSON.stringify(p.name));
+    }
+    const inputSchema = `{ type: "object", properties: { ${inputSchemaProps.join(", ")} }, required: [${requiredFields.join(", ")}], additionalProperties: false }`;
+    const description = decl.description ? JSON.stringify(decl.description) : JSON.stringify(`Tool: ${decl.name}`);
+    this.emit(`const ${decl.name} = __tl_runtime.defineTool({`);
+    this.indent++;
+    this.emit(`name: ${JSON.stringify(decl.name)},`);
+    this.emit(`description: ${description},`);
+    this.emit(`input: ${inputSchema},`);
+    this.emit(`execute: async ({ ${params} }) => {`);
+    this.indent++;
+    for (const stmt of decl.body) {
+      this.emitStatement(stmt);
+    }
+    this.indent--;
+    this.emit(`},`);
+    this.indent--;
+    this.emit(`});`);
   }
 
   private emitFunctionDeclaration(decl: AST.FunctionDeclarationNode): void {
@@ -317,6 +347,8 @@ class CodeGenerator {
         return this.emitInferExpr(expr);
       case "ReasonBlock":
         return this.emitReasonBlock(expr);
+      case "AgentExpression":
+        return this.emitAgentExpr(expr);
       case "PipelineExpression":
         return this.emitPipeline(expr);
       case "MatchExpression":
@@ -440,6 +472,40 @@ class CodeGenerator {
     }
 
     return `__tl_runtime.reason({ ${parts.join(", ")} })`;
+  }
+
+  private emitAgentExpr(expr: AST.AgentExpressionNode): string {
+    const schema = JSON.stringify(typeExprToJsonSchema(expr.typeArgument, this.typeDecls));
+    const prompt = this.emitExpr(expr.prompt);
+    const parts = [`jsonSchema: ${schema}`, `prompt: ${prompt}`];
+
+    // Tool references
+    if (expr.tools.length > 0) {
+      parts.push(`tools: [${expr.tools.join(", ")}]`);
+    } else {
+      parts.push(`tools: []`);
+    }
+
+    if (expr.withContext) {
+      parts.push(`context: ${this.emitContextArg(expr.withContext)}`);
+    }
+
+    if (expr.maxTurns) {
+      parts.push(`maxTurns: ${expr.maxTurns}`);
+    }
+
+    if (expr.guard) {
+      parts.push(`guards: ${this.emitGuardRules(expr.guard)}`);
+    }
+
+    if (expr.onFail) {
+      parts.push(`retryCount: ${expr.onFail.retryCount}`);
+      if (expr.onFail.fallback) {
+        parts.push(`fallback: () => (${this.emitExpr(expr.onFail.fallback)})`);
+      }
+    }
+
+    return `__tl_runtime.agent({ ${parts.join(", ")} })`;
   }
 
   private emitPipeline(expr: AST.PipelineExpressionNode): string {
@@ -616,6 +682,7 @@ class CodeGenerator {
       case "ThinkExpression":
       case "InferExpression":
       case "ReasonBlock":
+      case "AgentExpression":
       case "PipelineExpression":
         return true;
       case "FunctionCallExpression":

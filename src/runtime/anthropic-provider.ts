@@ -1,5 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { CompleteOptions, CompleteResult, ModelProvider } from "./provider.js";
+import type {
+  CompleteOptions,
+  CompleteResult,
+  ModelProvider,
+  ToolCall,
+  Message,
+} from "./provider.js";
 import { ModelUnavailable, SchemaViolation } from "./errors.js";
 
 // Properties not supported by the Anthropic JSON schema API
@@ -69,50 +75,107 @@ export class AnthropicProvider implements ModelProvider {
 
   async complete(options: CompleteOptions): Promise<CompleteResult> {
     const model = options.model ?? this.defaultModel;
-    const { schema, constraints } = sanitizeSchema(options.jsonSchema);
+    const hasTools = options.tools && options.tools.length > 0;
 
     let systemPrompt = options.systemPrompt;
-    if (constraints.length > 0) {
-      const suffix = "\n\nAdditional constraints:\n" + constraints.map(c => `- ${c}`).join("\n");
-      systemPrompt = systemPrompt ? systemPrompt + suffix : suffix.trimStart();
+
+    // Build messages array
+    let messages: any[];
+    if (options.messages && options.messages.length > 0) {
+      messages = this.convertMessages(options.messages);
+    } else {
+      messages = [{ role: "user", content: options.userMessage }];
+    }
+
+    // Build request params
+    const params: any = {
+      model,
+      max_tokens: options.maxTokens ?? 4096,
+      system: systemPrompt,
+      messages,
+    };
+
+    // Add tools if present
+    if (hasTools) {
+      params.tools = options.tools!.map(t => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.inputSchema,
+      }));
+
+      if (options.toolChoice) {
+        if (typeof options.toolChoice === "string") {
+          params.tool_choice = { type: options.toolChoice };
+        } else {
+          params.tool_choice = { type: "tool", name: options.toolChoice.name };
+        }
+      }
+    }
+
+    // Add JSON schema output format when schema is provided and no tools
+    if (options.jsonSchema && !hasTools) {
+      const { schema, constraints } = sanitizeSchema(options.jsonSchema);
+      if (constraints.length > 0) {
+        const suffix = "\n\nAdditional constraints:\n" + constraints.map(c => `- ${c}`).join("\n");
+        systemPrompt = systemPrompt ? systemPrompt + suffix : suffix.trimStart();
+        params.system = systemPrompt;
+      }
+      params.output_config = {
+        format: { type: "json_schema" as const, schema },
+      };
+    }
+
+    if (options.stopSequences && options.stopSequences.length > 0) {
+      params.stop_sequences = options.stopSequences;
     }
 
     try {
-      const response = await this.client.messages.create({
-        model,
-        max_tokens: options.maxTokens ?? 4096,
-        system: systemPrompt,
-        messages: [
-          { role: "user", content: options.userMessage },
-        ],
-        output_config: {
-          format: {
-            type: "json_schema" as const,
-            schema,
-          },
-        },
-      } as any);
+      const response = await this.client.messages.create(params);
 
       const usage = {
         inputTokens: (response as any).usage?.input_tokens ?? 0,
         outputTokens: (response as any).usage?.output_tokens ?? 0,
       };
 
-      const block = response.content[0] as any;
-      if (block && block.type === "json") {
-        return { data: block.json, usage, model };
-      }
+      // Map stop reason
+      const rawReason = (response as any).stop_reason;
+      const stopReason = rawReason === "tool_use" ? "tool_use" as const
+        : rawReason === "max_tokens" ? "max_tokens" as const
+        : rawReason === "stop_sequence" ? "stop_sequence" as const
+        : "end_turn" as const;
 
-      // Fallback: try parsing text content
-      if (block && block.type === "text") {
-        try {
-          return { data: JSON.parse((block as any).text), usage, model };
-        } catch {
-          throw new SchemaViolation("valid JSON", (block as any).text);
+      // Extract tool calls from response
+      const toolCalls: ToolCall[] = [];
+      let data: unknown = null;
+
+      for (const block of response.content) {
+        if ((block as any).type === "tool_use") {
+          toolCalls.push({
+            id: (block as any).id,
+            name: (block as any).name,
+            input: (block as any).input as Record<string, unknown>,
+          });
+        } else if ((block as any).type === "json") {
+          data = (block as any).json;
+        } else if ((block as any).type === "text") {
+          const text = (block as any).text;
+          if (data === null) {
+            try {
+              data = JSON.parse(text);
+            } catch {
+              data = text;
+            }
+          }
         }
       }
 
-      throw new SchemaViolation("json response", block);
+      return {
+        data,
+        usage,
+        model,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        stopReason,
+      };
     } catch (error: any) {
       if (error instanceof SchemaViolation) throw error;
       if (error?.status === 404) {
@@ -124,5 +187,35 @@ export class AnthropicProvider implements ModelProvider {
       }
       throw error;
     }
+  }
+
+  private convertMessages(messages: Message[]): any[] {
+    const result: any[] = [];
+    for (const msg of messages) {
+      if (msg.role === "tool_result" && msg.toolResults) {
+        result.push({
+          role: "user",
+          content: msg.toolResults.map(tr => ({
+            type: "tool_result",
+            tool_use_id: tr.toolCallId,
+            content: typeof tr.output === "string" ? tr.output : JSON.stringify(tr.output),
+            is_error: tr.isError ?? false,
+          })),
+        });
+      } else if (msg.role === "assistant" && msg.toolCalls && msg.toolCalls.length > 0) {
+        result.push({
+          role: "assistant",
+          content: msg.toolCalls.map(tc => ({
+            type: "tool_use",
+            id: tc.id,
+            name: tc.name,
+            input: tc.input,
+          })),
+        });
+      } else {
+        result.push({ role: msg.role, content: msg.content });
+      }
+    }
+    return result;
   }
 }
