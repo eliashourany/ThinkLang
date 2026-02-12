@@ -20,7 +20,7 @@ export interface InferOptions {
   uncertain?: boolean;
 }
 
-export async function infer(options: InferOptions): Promise<unknown> {
+export async function infer<T = unknown>(options: InferOptions): Promise<T> {
   const {
     jsonSchema: rawSchema,
     value,
@@ -53,10 +53,10 @@ export async function infer(options: InferOptions): Promise<unknown> {
   const cacheKey = JSON.stringify({ value, hint });
   const cached = globalCache.get(cacheKey, effectiveContext, jsonSchema);
   if (cached !== undefined) {
-    return cached;
+    return cached as T;
   }
 
-  const execute = async () => {
+  const execute = async (): Promise<T> => {
     const provider = getProvider();
     const { systemPrompt, userMessage } = buildInferPrompt(value, hint, effectiveContext);
 
@@ -87,10 +87,10 @@ export async function infer(options: InferOptions): Promise<unknown> {
     // Wrap in Confident if schema has that shape
     if (isConfidentSchema(jsonSchema)) {
       const r = result as any;
-      return new Confident(r.value, r.confidence, r.reasoning ?? "");
+      return new Confident(r.value, r.confidence, r.reasoning ?? "") as T;
     }
 
-    return result;
+    return result as T;
   };
 
   if (retryCount && retryCount > 0) {

@@ -1,3 +1,5 @@
+import { AnthropicProvider } from "./anthropic-provider.js";
+
 export interface CompleteOptions {
   systemPrompt: string;
   userMessage: string;
@@ -30,8 +32,14 @@ export function setProvider(provider: ModelProvider): void {
 
 export function getProvider(): ModelProvider {
   if (!currentProvider) {
+    // Auto-init from environment if ANTHROPIC_API_KEY is set
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (apiKey) {
+      currentProvider = new AnthropicProvider(apiKey);
+      return currentProvider;
+    }
     throw new Error(
-      "No ModelProvider configured. Set ANTHROPIC_API_KEY in .env or call setProvider()."
+      "No ModelProvider configured. Set ANTHROPIC_API_KEY in environment or call init()."
     );
   }
   return currentProvider;

@@ -68,7 +68,76 @@ print result
 
 **Error Handling** — Typed error hierarchy (`SchemaViolation`, `ConfidenceTooLow`, `GuardFailed`, etc.) with `try`/`catch`.
 
-## Quick Start
+## Use as a Library (JS/TS)
+
+ThinkLang's runtime can be used directly in any JavaScript or TypeScript project — no `.tl` files needed.
+
+```bash
+npm install thinklang
+```
+
+### Simplest usage (zero config)
+
+If `ANTHROPIC_API_KEY` is in your environment, it just works:
+
+```typescript
+import { think } from "thinklang";
+
+const greeting = await think<string>({
+  prompt: "Say hello to the world in a creative way",
+  jsonSchema: { type: "string" },
+});
+console.log(greeting);
+```
+
+### With Zod schemas (recommended)
+
+Use `zodSchema()` to define typed output with [Zod](https://zod.dev) — no hand-written JSON schemas:
+
+```typescript
+import { z } from "zod";
+import { think, zodSchema } from "thinklang";
+
+const Sentiment = z.object({
+  label: z.enum(["positive", "negative", "neutral"]),
+  score: z.number(),
+});
+
+const result = await think<z.infer<typeof Sentiment>>({
+  prompt: "Analyze the sentiment of: 'Great product!'",
+  ...zodSchema(Sentiment),
+});
+// result is typed as { label: "positive" | "negative" | "neutral"; score: number }
+```
+
+### Explicit initialization
+
+```typescript
+import { init, think } from "thinklang";
+
+init({ apiKey: "sk-ant-...", model: "claude-sonnet-4-20250514" });
+
+const result = await think<string>({
+  prompt: "Say hello briefly",
+  jsonSchema: { type: "string" },
+});
+```
+
+### Core functions
+
+| Function | Purpose |
+|----------|---------|
+| `think<T>(options)` | General-purpose LLM call with structured output |
+| `infer<T>(options)` | Type inference / transformation on a given value |
+| `reason<T>(options)` | Multi-step chain-of-thought reasoning |
+
+All three return `Promise<T>` with structured, schema-validated data. See the [Runtime API reference](https://thinklang.dev/reference/runtime-api) and `examples/js/` for more.
+
+---
+
+## Use as a Language (CLI)
+
+ThinkLang is also a full programming language where `think` is a keyword. Write `.tl` files and run them with the CLI.
 
 ### Prerequisites
 
@@ -187,6 +256,18 @@ The language server runs over stdio and provides:
 - **Signature Help** — Parameter hints for `think<T>()`, `infer<T>()`, and user-defined functions
 
 ## Examples
+
+### JavaScript/TypeScript (library usage)
+
+| File | Feature |
+|------|---------|
+| `examples/js/basic-think.ts` | Minimal `think()` call |
+| `examples/js/with-zod.ts` | Zod schemas for typed output |
+| `examples/js/explicit-init.ts` | Explicit `init()` with options |
+| `examples/js/custom-provider.ts` | Custom `ModelProvider` implementation |
+| `examples/js/cost-tracking.ts` | Token usage and cost monitoring |
+
+### ThinkLang programs (.tl)
 
 17 example programs in `examples/`:
 

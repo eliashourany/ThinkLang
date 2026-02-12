@@ -3,7 +3,26 @@
   "version": "0.1.5",
   "description": "ThinkLang — an AI-native programming language where think is a keyword",
   "type": "module",
-  "main": "dist/cli/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./runtime": {
+      "import": "./dist/runtime/index.js",
+      "types": "./dist/runtime/index.d.ts"
+    },
+    "./compiler": {
+      "import": "./dist/compiler/index.js",
+      "types": "./dist/compiler/index.d.ts"
+    },
+    "./parser": {
+      "import": "./dist/parser/index.js",
+      "types": "./dist/parser/index.d.ts"
+    }
+  },
   "bin": {
     "thinklang": "dist/cli/index.js",
     "thinklang-lsp": "dist/lsp/server.js"

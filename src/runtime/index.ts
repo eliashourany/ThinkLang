@@ -25,3 +25,5 @@ export {
 } from "./provider.js";
 export { AnthropicProvider } from "./anthropic-provider.js";
 export { CostTracker, globalCostTracker, type UsageRecord, type CostSummary, type OperationSummary } from "./cost-tracker.js";
+export { init, type InitOptions } from "./init.js";
+export { zodSchema, type ZodSchemaResult } from "./zod-schema.js";

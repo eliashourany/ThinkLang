@@ -20,6 +20,8 @@ features:
     details: First-class AI primitives for structured data generation, inference, and multi-step reasoning.
   - title: Type-Safe AI
     details: Define types, get typed AI responses. Uncertain values must be explicitly unwrapped.
+  - title: Use as a Library
+    details: "Use directly in JS/TS projects: import { think, zodSchema } from 'thinklang'. Zero config, Zod support, typed returns."
   - title: Guards & Confidence
     details: Constrain AI outputs with guards. Track confidence with Confident<T> wrapper.
   - title: Developer Experience

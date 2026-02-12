@@ -1,12 +1,49 @@
 # ThinkLang Runtime API Reference
 
-The ThinkLang runtime is the TypeScript library that executes compiled ThinkLang programs. It provides AI integration, confidence tracking, guards, caching, cost tracking, and error handling.
+The ThinkLang runtime is a TypeScript library that powers both compiled ThinkLang programs and direct JS/TS usage. It provides AI integration, confidence tracking, guards, caching, cost tracking, and error handling.
+
+Install and use directly in any JS/TS project:
+
+```bash
+npm install thinklang
+```
+
+```typescript
+import { init, think, infer, reason, zodSchema } from "thinklang";
+```
+
+---
+
+## Initialization
+
+### `init(options?: InitOptions): void`
+
+Convenience function to configure the runtime. Reads `ANTHROPIC_API_KEY` from environment by default.
+
+```typescript
+interface InitOptions {
+  apiKey?: string;   // Defaults to process.env.ANTHROPIC_API_KEY
+  model?: string;    // Defaults to process.env.THINKLANG_MODEL or "claude-opus-4-6"
+}
+```
+
+**Usage:**
+
+```typescript
+// Auto-detect from environment
+init();
+
+// Explicit configuration
+init({ apiKey: "sk-ant-...", model: "claude-sonnet-4-20250514" });
+```
+
+If you don't call `init()`, the runtime auto-initializes from `ANTHROPIC_API_KEY` on first AI call.
 
 ---
 
 ## Core Functions
 
-### `think(options: ThinkOptions): Promise<unknown>`
+### `think<T = unknown>(options: ThinkOptions): Promise<T>`
 
 Sends a prompt to the configured LLM and returns a structured response conforming to the provided JSON Schema.
 
@@ -44,7 +81,7 @@ let result = think<MyType>("Analyze this data")
 
 ---
 
-### `infer(options: InferOptions): Promise<unknown>`
+### `infer<T = unknown>(options: InferOptions): Promise<T>`
 
 Lightweight inference. Transforms, classifies, or derives a new value from an existing one.
 
@@ -74,7 +111,7 @@ let lang = infer<string>("Bonjour le monde", "Detect the language")
 
 ---
 
-### `reason(options: ReasonOptions): Promise<unknown>`
+### `reason<T = unknown>(options: ReasonOptions): Promise<T>`
 
 Multi-step reasoning. Guides the LLM through numbered steps toward a stated goal.
 
@@ -473,7 +510,7 @@ Registers a `ModelProvider` as the active provider for all AI calls.
 
 ### `getProvider(): ModelProvider`
 
-Returns the currently configured provider. Throws if no provider has been set.
+Returns the currently configured provider. If no provider has been explicitly set, auto-initializes from the `ANTHROPIC_API_KEY` environment variable. Throws if no provider is configured and no env var is available.
 
 ### `AnthropicProvider`
 
@@ -522,3 +559,44 @@ interface ContextManagerOptions {
 ### `excludeFromContext(context, exclusions): Record<string, unknown>`
 
 Removes specified keys from the context object. Used by the `without context:` clause.
+
+---
+
+## Zod Schema Helper
+
+### `zodSchema<T>(schema: ZodType<T>): { jsonSchema: Record<string, unknown> }`
+
+Converts a Zod schema into the JSON Schema object expected by `think`, `infer`, and `reason`. The result spreads directly into the options object.
+
+```typescript
+import { z } from "zod";
+import { think, zodSchema } from "thinklang";
+
+const Sentiment = z.object({
+  label: z.enum(["positive", "negative", "neutral"]),
+  score: z.number(),
+});
+
+const result = await think<z.infer<typeof Sentiment>>({
+  prompt: "Analyze sentiment",
+  ...zodSchema(Sentiment),
+});
+```
+
+**Supported Zod types:**
+
+| Zod Type | JSON Schema |
+|----------|-------------|
+| `z.string()` | `{ type: "string" }` |
+| `z.number()` | `{ type: "number" }` |
+| `z.boolean()` | `{ type: "boolean" }` |
+| `z.enum([...])` | `{ type: "string", enum: [...] }` |
+| `z.array(T)` | `{ type: "array", items: T }` |
+| `z.object({...})` | `{ type: "object", properties: {...}, required: [...] }` |
+| `z.optional(T)` | Field excluded from `required` |
+| `z.nullable(T)` | `{ anyOf: [T, { type: "null" }] }` |
+| `z.union([...])` | `{ anyOf: [...] }` |
+| `z.literal(v)` | `{ type: ..., const: v }` |
+| `z.record(K, V)` | `{ type: "object", additionalProperties: V }` |
+
+Descriptions set via `.describe()` are preserved in the JSON Schema output.
