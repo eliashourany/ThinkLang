@@ -1,6 +1,6 @@
 {
   "name": "thinklang",
-  "version": "0.1.6",
+  "version": "1.0.0",
   "description": "ThinkLang — an AI-native programming language where think is a keyword",
   "type": "module",
   "main": "dist/index.js",
