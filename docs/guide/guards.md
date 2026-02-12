@@ -112,3 +112,23 @@ try {
 ```
 
 The `GuardFailed` error includes the guard name, the constraint that was violated, and the actual value that caused the failure.
+
+## Using from JS/TS
+
+Guards are available in the library via the `guards`, `retryCount`, and `fallback` options on `think()`, `infer()`, `reason()`, and `agent()`. See the [Library Core Functions](/library/core-functions) and [Library Error Handling](/library/error-handling) guides.
+
+```typescript
+import { think } from "thinklang";
+
+const result = await think<string>({
+  prompt: "Write a product description",
+  jsonSchema: { type: "string" },
+  context: { product },
+  guards: [
+    { name: "length", constraint: 50, rangeEnd: 300 },
+    { name: "contains_none", constraint: ["click here", "buy now", "limited time"] },
+  ],
+  retryCount: 2,
+  fallback: () => "Description unavailable",
+});
+```

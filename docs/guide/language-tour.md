@@ -202,7 +202,7 @@ export ANTHROPIC_API_KEY=...   # or OPENAI_API_KEY, GEMINI_API_KEY
 
 Or use Ollama for local models with no API key needed.
 
-[Full guide: Provider System](./providers.md)
+[Full guide: Provider System](/library/providers)
 
 ## Cost Tracking
 
@@ -214,3 +214,28 @@ thinklang cost-report
 ```
 
 [Full guide: Cost Tracking](./cost-tracking.md)
+
+## Big Data
+
+Process collections through AI at scale:
+
+```thinklang
+let sentiments = map_think<Sentiment>(reviews, "Classify this review")
+  concurrency: 3
+  cost_budget: 1.00
+
+let summary = reduce_think<string>(sentiments, "Summarize all sentiments")
+  batch_size: 5
+```
+
+[Full guide: Big Data](./big-data.md)
+
+## Use as a JS/TS Library
+
+All of ThinkLang's features are also available as a JavaScript/TypeScript library — no `.tl` files needed:
+
+```typescript
+import { think, agent, defineTool, zodSchema } from "thinklang";
+```
+
+[Library Quick Start](/library/quick-start)

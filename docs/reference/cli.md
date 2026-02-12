@@ -7,14 +7,13 @@ The `thinklang` CLI compiles and runs ThinkLang (`.tl`) programs, provides a REP
 ## Installation
 
 ```bash
-npm install
-npm run build
+npm install -g thinklang
 ```
 
-Run commands via `npx`:
+Or run commands via `npx` without installing globally:
 
 ```bash
-npx tsx src/cli/index.ts <command> [options]
+npx thinklang <command> [options]
 ```
 
 ---
@@ -33,7 +32,7 @@ Compiles and executes a ThinkLang program.
 **Process:**
 
 1. Loads environment variables from `.env`.
-2. Initializes the Anthropic provider (if `ANTHROPIC_API_KEY` is set).
+2. Initializes the provider from available API keys (auto-detected).
 3. Reads and compiles the source file.
 4. Reports any compilation errors and exits with code 1 if present.
 5. Prints any compilation warnings.
@@ -43,8 +42,8 @@ Compiles and executes a ThinkLang program.
 **Example:**
 
 ```bash
-npx tsx src/cli/index.ts run examples/01-hello-think.tl
-npx tsx src/cli/index.ts run examples/02-classification.tl --show-cost
+thinklang run examples/01-hello-think.tl
+thinklang run examples/02-classification.tl --show-cost
 ```
 
 ---
@@ -62,10 +61,10 @@ Compiles a ThinkLang program to TypeScript source code without executing it.
 
 ```bash
 # Print compiled TypeScript to stdout
-npx tsx src/cli/index.ts compile examples/01-hello-think.tl
+thinklang compile examples/01-hello-think.tl
 
 # Write to a file
-npx tsx src/cli/index.ts compile examples/01-hello-think.tl -o output.ts
+thinklang compile examples/01-hello-think.tl -o output.ts
 ```
 
 ---
@@ -75,10 +74,10 @@ npx tsx src/cli/index.ts compile examples/01-hello-think.tl -o output.ts
 Starts an interactive Read-Eval-Print Loop for ThinkLang.
 
 ```bash
-npx tsx src/cli/index.ts repl
+thinklang repl
 ```
 
-The REPL initializes the Anthropic provider and allows you to enter ThinkLang statements interactively.
+The REPL initializes the provider from available environment variables and allows you to enter ThinkLang statements interactively.
 
 ---
 
@@ -107,19 +106,19 @@ Runs ThinkLang test files (`.test.tl`).
 
 ```bash
 # Run all tests in current directory
-npx tsx src/cli/index.ts test
+thinklang test
 
 # Run tests in a specific directory
-npx tsx src/cli/index.ts test tests/
+thinklang test tests/
 
 # Record snapshots
-npx tsx src/cli/index.ts test --update-snapshots
+thinklang test --update-snapshots
 
 # Replay from snapshots (no AI calls)
-npx tsx src/cli/index.ts test --replay
+thinklang test --replay
 
 # Filter by pattern
-npx tsx src/cli/index.ts test --pattern "classification"
+thinklang test --pattern "classification"
 ```
 
 ---
@@ -129,7 +128,7 @@ npx tsx src/cli/index.ts test --pattern "classification"
 Displays the cost report for the current session.
 
 ```bash
-npx tsx src/cli/index.ts cost-report
+thinklang cost-report
 ```
 
 **Output includes:**
@@ -137,7 +136,7 @@ npx tsx src/cli/index.ts cost-report
 - Total number of AI calls
 - Total input and output tokens
 - Total estimated cost in USD
-- Breakdown by operation (`think`, `infer`, `reason`, `semantic_assert`)
+- Breakdown by operation (`think`, `infer`, `reason`, `agent`, `semantic_assert`, `batch`, `map_think`, `reduce_think`)
 - Breakdown by model
 
 If no AI calls have been made, prints "No AI calls were made."
@@ -146,13 +145,18 @@ If no AI calls have been made, prints "No AI calls were made."
 
 ## Environment Variables
 
-Configure ThinkLang behavior through environment variables. Create a `.env` file in the project root (copy from `.env.example`).
+Configure ThinkLang behavior through environment variables. Create a `.env` file in the project root or export them in your shell.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | Yes (for AI features) | -- | Your Anthropic API key |
-| `THINKLANG_MODEL` | No | `claude-opus-4-6` | The Claude model to use |
+| `ANTHROPIC_API_KEY` | One of these | -- | Anthropic API key |
+| `OPENAI_API_KEY` | One of these | -- | OpenAI API key |
+| `GEMINI_API_KEY` | One of these | -- | Google Gemini API key |
+| `OLLAMA_BASE_URL` | One of these | `http://localhost:11434` | Ollama server URL |
+| `THINKLANG_MODEL` | No | Provider default | Override the default model for any provider |
 | `THINKLANG_CACHE` | No | `true` | Set to `false` to disable result caching |
+
+The provider is auto-detected from whichever API key is set. See the [Provider System](/library/providers) for details on detection order and supported providers.
 
 **Example `.env` file:**
 

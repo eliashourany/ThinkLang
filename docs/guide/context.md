@@ -83,3 +83,26 @@ Context entries are sorted by size, so smaller entries are preserved in full bef
 - **Include only relevant data.** Smaller, focused context produces better results and costs less.
 - **Use `without context` for sensitive fields.** Never send PII, credentials, or secrets to the AI.
 - **Chain context across calls.** Build up understanding incrementally rather than dumping everything into one call.
+
+## Using from JS/TS
+
+In the library API, context is passed via the `context` option and exclusions via `withoutKeys`. See the [Library Core Functions](/library/core-functions) guide for details.
+
+```typescript
+import { think } from "thinklang";
+
+// Pass context
+const result = await think<{ category: string }>({
+  prompt: "Classify this email",
+  jsonSchema: { type: "object", properties: { category: { type: "string" } }, required: ["category"] },
+  context: { email: "Congratulations! You've won!", subject: "Prize notification" },
+});
+
+// Exclude keys from context
+const safe = await think<{ recommendation: string }>({
+  prompt: "Suggest products based on interests",
+  jsonSchema: { type: "object", properties: { recommendation: { type: "string" } }, required: ["recommendation"] },
+  context: { profile, sensitiveData },
+  withoutKeys: ["sensitiveData"],
+});
+```
